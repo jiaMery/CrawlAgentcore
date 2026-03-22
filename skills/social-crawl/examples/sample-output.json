@@ -1,0 +1,15 @@
+{
+  "posts": [
+    {
+      "author": "dev_user42",
+      "timestamp": "2025-11-15T14:30:00Z",
+      "content": "Just released v2.0 of my open-source crawler library. Check it out!",
+      "url": "https://forum.example.com/posts/12345",
+      "likes": 128,
+      "replies": 23,
+      "tags": ["open-source", "release"]
+    }
+  ],
+  "posts_crawled": 10,
+  "source_url": "https://forum.example.com/r/programming"
+}

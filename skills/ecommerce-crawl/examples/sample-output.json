@@ -1,0 +1,14 @@
+{
+  "products": [
+    {
+      "name": "A Light in the Attic",
+      "price": 51.77,
+      "currency": "GBP",
+      "description": "Poetry collection by Shel Silverstein",
+      "image_urls": ["https://books.toscrape.com/media/cache/fe/72/fe72f0532301ec28791a2b8571.jpg"],
+      "availability": "In stock"
+    }
+  ],
+  "pages_crawled": 2,
+  "total_products": 40
+}

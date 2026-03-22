@@ -1,0 +1,194 @@
+<mxfile host="app.diagrams.net" modified="2026-03-22T10:00:00.000Z" agent="Kiro" version="24.0.0" type="device">
+  <diagram id="crawler-agent-arch" name="Crawler Agent Architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ============ BACKGROUND LANES ============ -->
+        <!-- Client Layer -->
+        <mxCell id="lane_client" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#CCCCCC;strokeWidth=1;dashed=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="30" y="60" width="200" height="720" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_client_label" value="&lt;b&gt;Client&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=13;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="95" y="68" width="60" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- AgentCore Runtime Layer -->
+        <mxCell id="lane_runtime" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EBF5FB;strokeColor=#AED6F1;strokeWidth=1;dashed=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="290" y="60" width="460" height="720" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_runtime_label" value="&lt;b&gt;Bedrock AgentCore Runtime&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=13;fontColor=#2471A3;" vertex="1" parent="1">
+          <mxGeometry x="390" y="68" width="220" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- External Layer -->
+        <mxCell id="lane_external" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF9E7;strokeColor=#F9E79F;strokeWidth=1;dashed=1;arcSize=8;" vertex="1" parent="1">
+          <mxGeometry x="810" y="60" width="260" height="720" as="geometry" />
+        </mxCell>
+        <mxCell id="lane_external_label" value="&lt;b&gt;External&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=13;fontColor=#B7950B;" vertex="1" parent="1">
+          <mxGeometry x="905" y="68" width="70" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ============ NODES ============ -->
+
+        <!-- 1. User -->
+        <mxCell id="user" value="User" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.user;labelBackgroundColor=none;sketch=0;fontStyle=1;fontSize=12;fontColor=#232F3E;fillColor=#D45B07;strokeColor=#ffffff;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="96" y="130" width="68" height="68" as="geometry" />
+        </mxCell>
+
+        <!-- 2. crawler_cli.py -->
+        <mxCell id="cli" value="&lt;b&gt;crawler_cli.py&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#888888&quot;&gt;Interactive CLI&lt;br&gt;Unicode unescape&lt;br&gt;JSON display &amp;amp; save&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2471A3;strokeWidth=2;arcSize=10;shadow=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="55" y="280" width="150" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- 3. invoke() entrypoint -->
+        <mxCell id="invoke" value="&lt;b&gt;main.py&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#888888&quot;&gt;invoke() entrypoint&lt;br&gt;ASCII-safe encoding&lt;br&gt;Output extraction&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#1A5276;strokeWidth=2;arcSize=10;shadow=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="370" y="140" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- 4. Skill Selector (LLM) -->
+        <mxCell id="selector" value="&lt;b&gt;Skill Selector&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#888888&quot;&gt;LLM picks best skill&lt;br&gt;from user prompt&lt;/font&gt;" style="rhombus;whiteSpace=wrap;html=1;fillColor=#D5F5E3;strokeColor=#27AE60;strokeWidth=2;shadow=1;fontSize=11;arcSize=12;" vertex="1" parent="1">
+          <mxGeometry x="380" y="280" width="140" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- 5. Skills -->
+        <mxCell id="skills" value="&lt;b&gt;SKILL.md&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#888888&quot;&gt;default · ecommerce&lt;br&gt;news · api · docs · social&lt;/font&gt;" style="shape=document;whiteSpace=wrap;html=1;fillColor=#FCF3CF;strokeColor=#D4AC0D;strokeWidth=2;shadow=1;fontSize=11;size=0.15;" vertex="1" parent="1">
+          <mxGeometry x="570" y="280" width="155" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- 6. Strands Agent (LLM) -->
+        <mxCell id="agent" value="&lt;b&gt;Strands Agent&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#888888&quot;&gt;LLM generates&lt;br&gt;Python crawler script&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D6EAF8;strokeColor=#2E86C1;strokeWidth=2;arcSize=10;shadow=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="370" y="440" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- 7. Code Interpreter -->
+        <mxCell id="ci" value="&lt;b&gt;Code Interpreter&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#888888&quot;&gt;Sandboxed Python&lt;br&gt;Executes crawler script&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8DAEF;strokeColor=#7D3C98;strokeWidth=2;arcSize=10;shadow=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="370" y="600" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- 8. Bedrock LLM -->
+        <mxCell id="llm" value="&lt;b&gt;Amazon Bedrock&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#888888&quot;&gt;Foundation Model&lt;br&gt;(Claude)&lt;/font&gt;" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.machine_learning;labelBackgroundColor=none;sketch=0;fontStyle=1;fontSize=11;fontColor=#232F3E;fillColor=#01A88D;strokeColor=#ffffff;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="876" y="140" width="68" height="68" as="geometry" />
+        </mxCell>
+
+        <!-- 9. Target Website -->
+        <mxCell id="website" value="&lt;b&gt;Target Website&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#888888&quot;&gt;e.g. 豆瓣 TOP250&lt;/font&gt;" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.internet_alt2;labelBackgroundColor=none;sketch=0;fontStyle=1;fontSize=11;fontColor=#232F3E;fillColor=#8C4FFF;strokeColor=#ffffff;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="876" y="600" width="68" height="68" as="geometry" />
+        </mxCell>
+
+        <!-- 10. Output JSON -->
+        <mxCell id="output" value="&lt;b&gt;movies.json&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size:10px&quot; color=&quot;#888888&quot;&gt;Structured output&lt;/font&gt;" style="shape=document;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2471A3;strokeWidth=2;shadow=1;fontSize=11;size=0.15;" vertex="1" parent="1">
+          <mxGeometry x="60" y="460" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- ============ ARROWS ============ -->
+
+        <!-- User → CLI: prompt -->
+        <mxCell id="a1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#333333;strokeWidth=1.5;fontSize=10;fontColor=#555555;" edge="1" source="user" target="cli" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+          <Array as="points" />
+        </mxCell>
+        <mxCell id="a1_label" value="① NL prompt" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#555555;" vertex="1" connectable="0" parent="a1">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint x="15" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- CLI → invoke: JSON payload -->
+        <mxCell id="a2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#333333;strokeWidth=1.5;fontSize=10;fontColor=#555555;" edge="1" source="cli" target="invoke" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a2_label" value="② agentcore invoke" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#555555;" vertex="1" connectable="0" parent="a2">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="-12" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- invoke → selector -->
+        <mxCell id="a3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#333333;strokeWidth=1.5;fontSize=10;fontColor=#555555;" edge="1" source="invoke" target="selector" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a3_label" value="③ auto-select" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#555555;" vertex="1" connectable="0" parent="a3">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint x="15" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- selector → skills -->
+        <mxCell id="a4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#333333;strokeWidth=1.5;fontSize=10;fontColor=#555555;" edge="1" source="selector" target="skills" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a4_label" value="④ load SKILL.md" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#555555;" vertex="1" connectable="0" parent="a4">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="-12" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- selector → agent -->
+        <mxCell id="a5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#333333;strokeWidth=1.5;fontSize=10;fontColor=#555555;" edge="1" source="selector" target="agent" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a5_label" value="⑤ skill → system prompt" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#555555;" vertex="1" connectable="0" parent="a5">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint x="20" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- agent → LLM -->
+        <mxCell id="a6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;strokeColor=#2E86C1;strokeWidth=1.5;fontSize=10;fontColor=#2E86C1;dashed=1;" edge="1" source="agent" target="llm" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="760" y="460" />
+              <mxPoint x="760" y="208" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="a6_label" value="⑥ generate script" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#2E86C1;" vertex="1" connectable="0" parent="a6">
+          <mxGeometry x="-0.3" relative="1" as="geometry"><mxPoint x="12" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- agent → CI: execute -->
+        <mxCell id="a7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#7D3C98;strokeWidth=1.5;fontSize=10;fontColor=#7D3C98;" edge="1" source="agent" target="ci" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a7_label" value="⑦ execute script" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#7D3C98;" vertex="1" connectable="0" parent="a7">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint x="18" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- CI → Website: HTTP -->
+        <mxCell id="a8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#B7950B;strokeWidth=1.5;fontSize=10;fontColor=#B7950B;" edge="1" source="ci" target="website" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a8_label" value="⑧ HTTP requests" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#B7950B;" vertex="1" connectable="0" parent="a8">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint y="-12" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- CI → invoke: stdout (toolResult) -->
+        <mxCell id="a9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;strokeColor=#C0392B;strokeWidth=1.5;fontSize=10;fontColor=#C0392B;dashed=1;" edge="1" source="ci" target="invoke" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="320" y="620" />
+              <mxPoint x="320" y="220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="a9_label" value="⑨ stdout → extract output&lt;br&gt;&lt;font style=&quot;font-size:9px&quot;&gt;unwrap CI format&lt;br&gt;decode base64 / parse JSON&lt;/font&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#C0392B;" vertex="1" connectable="0" parent="a9">
+          <mxGeometry x="0.2" relative="1" as="geometry"><mxPoint x="-55" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- invoke → CLI: response -->
+        <mxCell id="a10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.75;entryDx=0;entryDy=0;strokeColor=#333333;strokeWidth=1.5;fontSize=10;fontColor=#555555;" edge="1" source="invoke" target="cli" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="260" y="180" />
+              <mxPoint x="260" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="a10_label" value="⑩ ASCII-safe response" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#555555;" vertex="1" connectable="0" parent="a10">
+          <mxGeometry x="0.3" relative="1" as="geometry"><mxPoint x="-12" as="offset" /></mxGeometry>
+        </mxCell>
+
+        <!-- CLI → Output -->
+        <mxCell id="a11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#333333;strokeWidth=1.5;fontSize=10;fontColor=#555555;" edge="1" source="cli" target="output" parent="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a11_label" value="⑪ save JSON" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontSize=10;fontColor=#555555;" vertex="1" connectable="0" parent="a11">
+          <mxGeometry x="-0.1" relative="1" as="geometry"><mxPoint x="15" as="offset" /></mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,15 @@
+{
+  "articles": [
+    {
+      "title": "Scientists Discover New Deep-Sea Species",
+      "author": "Jane Smith",
+      "publish_date": "2025-11-15",
+      "summary": "Marine biologists have identified a previously unknown species of jellyfish in the Mariana Trench.",
+      "body_text": "Marine biologists have identified a previously unknown species of jellyfish in the Mariana Trench during a recent expedition...",
+      "tags": ["science", "marine biology", "discovery"],
+      "url": "https://news.example.com/deep-sea-species"
+    }
+  ],
+  "articles_crawled": 5,
+  "source_url": "https://news.example.com"
+}

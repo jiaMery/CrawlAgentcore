@@ -1,0 +1,38 @@
+{
+  "pages": [
+    {
+      "url": "https://docs.example.com/getting-started",
+      "title": "Getting Started",
+      "sections": [
+        {
+          "heading": "Installation",
+          "level": 2,
+          "text": "Install the package using pip.",
+          "code_blocks": [
+            {
+              "language": "bash",
+              "code": "pip install example-sdk"
+            }
+          ]
+        },
+        {
+          "heading": "Quick Start",
+          "level": 2,
+          "text": "Create a client and make your first request.",
+          "code_blocks": [
+            {
+              "language": "python",
+              "code": "from example import Client\nclient = Client()\nclient.hello()"
+            }
+          ]
+        }
+      ],
+      "nav_links": [
+        {"text": "Configuration", "url": "/configuration"},
+        {"text": "API Reference", "url": "/api"}
+      ]
+    }
+  ],
+  "pages_crawled": 1,
+  "total_sections": 2
+}
