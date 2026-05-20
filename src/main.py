@@ -21,14 +21,82 @@ from bedrock_agentcore.runtime import BedrockAgentCoreApp
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Observability — Strands OpenTelemetry → AWS X-Ray OTLP endpoint
+# ---------------------------------------------------------------------------
+class _RefreshingAWS4Auth:
+    """Wrapper that refreshes SigV4 credentials on every request.
+
+    boto3 credential objects can expire (e.g., ECS/EC2 task-role tokens).
+    Re-fetching credentials on each call ensures the signature is always valid.
+    """
+
+    def __init__(self, boto3_session, region: str, service: str) -> None:
+        self._boto3_session = boto3_session
+        self._region = region
+        self._service = service
+
+    def __call__(self, r):
+        from requests_aws4auth import AWS4Auth
+
+        creds = self._boto3_session.get_credentials().get_frozen_credentials()
+        auth = AWS4Auth(
+            creds.access_key,
+            creds.secret_key,
+            self._region,
+            self._service,
+            session_token=creds.token,
+        )
+        return auth(r)
+
+
+def _setup_observability() -> None:
+    region = os.environ.get("AWS_REGION", "us-east-1")
+    service_name = os.environ.get("OTEL_SERVICE_NAME", "crawler-agentcore")
+    os.environ.setdefault("OTEL_SERVICE_NAME", service_name)
+
+    try:
+        import boto3
+        import requests
+        from strands.telemetry.config import StrandsTelemetry
+
+        boto3_session = boto3.Session()
+        session = requests.Session()
+        session.auth = _RefreshingAWS4Auth(boto3_session, region, "xray")
+
+        endpoint = f"https://xray.{region}.amazonaws.com/v1/traces"
+        StrandsTelemetry().setup_otlp_exporter(endpoint=endpoint, session=session)
+        logger.info("Observability: X-Ray OTLP tracing enabled → %s", endpoint)
+    except Exception as e:
+        logger.warning("Observability: setup failed (non-fatal): %s", e)
+
+
+_setup_observability()
+
+# ---------------------------------------------------------------------------
 # AgentCore Code Interpreter tool
 # ---------------------------------------------------------------------------
-REGION = os.environ.get("AWS_REGION", "us-west-2")
-CODE_INTERPRETER_ID = os.environ.get("CODE_INTERPRETER_ID", "crawlerPublicCI-8BN3ReoZTv")
+REGION = os.environ.get("AWS_REGION", "us-east-1")
+CODE_INTERPRETER_ID = os.environ.get("CODE_INTERPRETER_ID", "crawlerCI-URXI2eonxQ")
 code_interpreter_tool = AgentCoreCodeInterpreter(region=REGION, identifier=CODE_INTERPRETER_ID)
 
 # ---------------------------------------------------------------------------
-# System prompt template
+# AgentCore Browser tool (optional — loaded only when use_browser=True)
+# ---------------------------------------------------------------------------
+try:
+    try:
+        from src.browser_tool import browser_crawl as _browser_crawl_tool
+    except ModuleNotFoundError:
+        from browser_tool import browser_crawl as _browser_crawl_tool
+    BROWSER_TOOL_AVAILABLE = True
+    logger.info("Browser tool loaded (BROWSER_ID=%s)",
+                os.environ.get("BROWSER_ID", "crawlerBrowser-HCHUMemYzS"))
+except Exception as _e:
+    BROWSER_TOOL_AVAILABLE = False
+    _browser_crawl_tool = None
+    logger.warning("Browser tool not available: %s", _e)
+
+# ---------------------------------------------------------------------------
+# System prompt templates
 # ---------------------------------------------------------------------------
 SYSTEM_PROMPT_TEMPLATE = """You are a web-crawler code generator and executor.
 
@@ -54,6 +122,30 @@ SYSTEM_PROMPT_TEMPLATE = """You are a web-crawler code generator and executor.
 - When making HTTP requests to sites that may return non-ASCII content, set
   `response.encoding = response.apparent_encoding` (or `'utf-8'`) before reading
   `response.text` to avoid charset mis-detection.
+"""
+
+# Appended to system prompt when browser_crawl tool is available
+BROWSER_HINT = """
+## Browser Tool (browser_crawl)
+
+You have access to TWO tools:
+1. **code_interpreter** — runs Python scripts (requests + BeautifulSoup). Fast and cheap.
+2. **browser_crawl** — opens a real managed Chromium browser with full JS rendering.
+
+### When to use browser_crawl instead of code_interpreter
+- The target URL requires JavaScript to display content (SPA / React / Vue apps)
+- Plain HTTP requests return 403, captcha page, or empty body
+- The user explicitly asked to use the browser
+
+### When to use code_interpreter (default)
+- Static HTML pages (most news, docs, APIs, e-commerce)
+- The user did NOT explicitly request browser mode
+
+### browser_crawl usage
+Call: browser_crawl(url="https://example.com", wait_seconds=3.0)
+Returns JSON with: url, title, text_content, links, screenshot_b64, method="browser"
+Parse the returned JSON string with json.loads() to access the fields.
+Do NOT use _safe_output() with browser results — return them directly in your reply.
 """
 
 # ---------------------------------------------------------------------------
@@ -339,10 +431,18 @@ def _ensure_ascii_safe(obj):
 
 @app.entrypoint
 def invoke(payload: dict, context: dict) -> dict:
-    """Handle an incoming crawl request."""
+    """Handle an incoming crawl request.
+
+    Payload fields:
+      prompt       (str)  — natural-language crawl request
+      skill        (str)  — optional: force a specific skill name
+      args         (str)  — optional: arguments forwarded to the skill
+      use_browser  (bool) — optional: inject browser_crawl tool (default False)
+    """
     prompt = payload.get("prompt", "")
     explicit_skill = payload.get("skill")
     skill_args = payload.get("args", prompt)
+    use_browser = bool(payload.get("use_browser", False))
 
     if explicit_skill:
         skill_name = explicit_skill
@@ -352,8 +452,17 @@ def invoke(payload: dict, context: dict) -> dict:
     skill = load_skill(skill_name, arguments=skill_args)
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(crawl_style=skill.content)
 
+    # Inject browser tool hint + tool when requested
+    tools = [code_interpreter_tool.code_interpreter]
+    if use_browser and BROWSER_TOOL_AVAILABLE and _browser_crawl_tool is not None:
+        tools.append(_browser_crawl_tool)
+        system_prompt = system_prompt + BROWSER_HINT
+        logger.info("Browser tool enabled for this request")
+    elif use_browser and not BROWSER_TOOL_AVAILABLE:
+        logger.warning("use_browser=True but browser tool is not available; falling back to code_interpreter")
+
     agent = Agent(
-        tools=[code_interpreter_tool.code_interpreter],
+        tools=tools,
         system_prompt=system_prompt,
     )
 
@@ -414,6 +523,7 @@ def invoke(payload: dict, context: dict) -> dict:
         "skill_used": skill.name,
         "skill_description": skill.description,
         "auto_selected": explicit_skill is None,
+        "browser_used": use_browser and BROWSER_TOOL_AVAILABLE,
         "available_skills": list_skills(),
     }
 

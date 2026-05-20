@@ -2,3 +2,6 @@ strands-agents>=0.1.0
 strands-agents-tools>=0.1.0
 bedrock-agentcore>=0.1.0
 boto3>=1.35.0
+opentelemetry-exporter-otlp-proto-http
+requests-aws4auth
+websocket-client>=1.7.0

@@ -157,28 +157,52 @@ def _extract_dev_response(stdout: str) -> str:
         {
             'response': '<json_string>'
         }
-    The inner JSON string may span multiple lines (with raw newlines), so
-    we can't use ast.literal_eval.  Instead we locate the boundaries of
-    the inner string by finding the opening/closing quote markers, then
-    fix up raw newlines that break JSON parsing.
+    The inner JSON string may contain raw newlines (line-wrapped by the
+    transport) and escaped single-quotes (\\'). We locate the outer Python
+    dict with ast.literal_eval; if that fails we fall back to a regex that
+    strips line-wrapping newlines before parsing.
     """
-    # Find the start: 'response': '  (the JSON starts right after)
+    import ast as _ast
+
+    # Strategy 1: find the outer Python dict and eval it
+    brace_start = stdout.find('{')
+    brace_end = stdout.rfind('}')
+    if brace_start != -1 and brace_end > brace_start:
+        candidate = stdout[brace_start:brace_end + 1]
+        try:
+            parsed = _ast.literal_eval(candidate)
+            if isinstance(parsed, dict) and 'response' in parsed:
+                return parsed['response']
+        except (ValueError, SyntaxError):
+            pass
+
+    # Strategy 2: locate 'response': ' ... ' boundaries manually,
+    # collapsing line-wrap newlines that appear inside the JSON string.
     marker = "'response': '"
     start = stdout.find(marker)
     if start == -1:
         raise ValueError("No 'response' key found in dev server output")
     start += len(marker)
 
-    # Find the end: the last single-quote before the final closing brace
-    end = stdout.rfind("'")
-    if end <= start:
-        raise ValueError("Cannot find end of response string")
+    # Walk forward to find the closing unescaped single-quote.
+    i = start
+    s = stdout
+    n = len(s)
+    while i < n:
+        c = s[i]
+        if c == '\\':
+            i += 2  # skip escaped character
+            continue
+        if c == '\n':
+            i += 1  # skip line-wrap newline (not a real escape)
+            continue
+        if c == "'":
+            break
+        i += 1
 
-    raw = stdout[start:end]
-    # The dev server inserts raw newlines into the JSON string (line wrapping).
-    # These are invalid JSON control characters.  Replace them with escaped \\n
-    # so json.loads can handle them.  Use strict=False as a fallback.
-    raw = raw.replace('\r\n', '\\n').replace('\r', '\\n').replace('\n', '\\n')
+    raw = s[start:i]
+    # Remove line-wrap newlines that aren't actual \\n escape sequences
+    raw = _re.sub(r'(?<!\\)\n', '', raw)
     return raw
 
 
@@ -187,24 +211,92 @@ def _extract_dev_response(stdout: str) -> str:
 
 def find_agentcore_bin():
     """Locate the agentcore CLI binary."""
-    venv_bin = os.path.join(os.path.dirname(__file__), ".venv", "bin", "agentcore")
-    if os.path.isfile(venv_bin):
-        return venv_bin
+    base = os.path.dirname(__file__)
+    for venv in (".venv2", ".venv"):
+        candidate = os.path.join(base, venv, "bin", "agentcore")
+        if os.path.isfile(candidate):
+            return candidate
     return "agentcore"
 
 
-def invoke_agent(prompt, skill=None, dev=False, timeout=180):
+def find_dev_port():
+    """Find the port where the agentcore dev server is actually listening."""
+    import socket
+    for port in (8080, 8081, 8082, 8083, 8084):
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return port
+        except OSError:
+            continue
+    return 8080  # fallback
+
+
+def _invoke_agent_http(payload: dict, port: int, session_id: str, timeout: int) -> dict:
+    """Call dev server directly via HTTP — avoids agentcore CLI parsing issues."""
+    import urllib.request
+    import urllib.error
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/invocations",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "X-Amzn-Bedrock-AgentCore-Runtime-SessionId": session_id,
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _invoke_agent_cloud(payload: dict, session_id: str, timeout: int) -> dict:
+    """Call the deployed AgentCore Runtime Endpoint via boto3."""
+    import boto3
+    from botocore.config import Config
+    client = boto3.client(
+        "bedrock-agentcore",
+        region_name="us-east-1",
+        config=Config(read_timeout=timeout, connect_timeout=10),
+    )
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    resp = client.invoke_agent_runtime(
+        agentRuntimeArn="arn:aws:bedrock-agentcore:us-east-1:387745077854:runtime/crawlerAgentcore-MRLKrbCBnT",
+        qualifier="crawlerEndpoint",
+        runtimeSessionId=session_id,
+        contentType="application/json",
+        accept="application/json",
+        payload=body,
+    )
+    raw = resp["response"]
+    if hasattr(raw, "read"):
+        raw = raw.read()
+    return json.loads(raw.decode("utf-8"))
+
+
+def invoke_agent(prompt, skill=None, dev=False, cloud=False, timeout=180, use_browser=False):
     """Send a crawl request to the AgentCore agent and return parsed response."""
     payload = {"prompt": prompt}
     if skill:
         payload["skill"] = skill
         payload["args"] = prompt
+    if use_browser:
+        payload["use_browser"] = True
+
+    session_id = f"cli-{uuid.uuid4().hex}"
+
+    # Cloud mode: call the deployed AgentCore Runtime Endpoint via boto3.
+    if cloud:
+        parsed = _invoke_agent_cloud(payload, session_id, timeout)
+        return _unescape_unicode_recursive(parsed)
+
+    # Dev mode: call the local server directly via HTTP.
+    if dev:
+        port = find_dev_port()
+        parsed = _invoke_agent_http(payload, port, session_id, timeout)
+        return _unescape_unicode_recursive(parsed)
 
     agentcore = find_agentcore_bin()
     cmd = [agentcore, "invoke"]
-    if dev:
-        cmd.append("--dev")
-    cmd.extend(["--session-id", f"cli-{uuid.uuid4().hex}"])
+    cmd.extend(["--session-id", session_id])
     cmd.append(json.dumps(payload, ensure_ascii=False))
 
     # Force UTF-8 encoding for subprocess
@@ -225,31 +317,21 @@ def invoke_agent(prompt, skill=None, dev=False, timeout=180):
 
     stdout = result.stdout.strip()
 
-    # Parse response — multiple strategies for different output formats
+    # Parse response — multiple strategies for deployed agent output formats
     for parser in [
-        # 1. Direct JSON (deployed agent, clean output)
+        # 1. Direct JSON (clean output)
         lambda s: json.loads(s),
-        # 2. Dev server format: "✓ Response from dev server:\n{'response': '<json>'}"
-        lambda s: json.loads(
-            _extract_dev_response(s)
-        ) if "Response" in s and "'response'" in s else (_ for _ in ()).throw(ValueError()),
-        # 3. Runtime format: "Response:\n<json with transport-inserted newlines>"
-        #    The transport layer inserts real newlines into the JSON.  We strip
-        #    them before parsing.
+        # 2. Runtime format: "Response:\n<json>"
         lambda s: json.loads(
             s[s.find("Response:") + 9:].strip().replace('\n', '')
         ) if "Response:" in s else (_ for _ in ()).throw(ValueError()),
-        # 4. Brute-force: find outermost { ... } and strip newlines
+        # 3. Brute-force: find outermost { ... }
         lambda s: json.loads(
             s[s.find("{"):s.rfind("}") + 1].replace('\n', '')
         ) if "{" in s else (_ for _ in ()).throw(ValueError()),
     ]:
         try:
             parsed = parser(stdout)
-            # Decode any \\uXXXX escape sequences that survived as literal text.
-            # The server pre-escapes non-ASCII to avoid transport corruption;
-            # json.loads handles standard \\uXXXX in JSON strings, but if the
-            # value was double-escaped (e.g. \\\\uXXXX) we fix it here.
             return _unescape_unicode_recursive(parsed)
         except (json.JSONDecodeError, ValueError, TypeError):
             continue
@@ -314,6 +396,9 @@ def extract_agent_text(result_msg):
 def main():
     parser = argparse.ArgumentParser(description="Crawler Agent interactive client")
     parser.add_argument("--dev", action="store_true", help="Use local dev server")
+    parser.add_argument("--cloud", action="store_true", help="Use deployed cloud AgentCore Runtime")
+    parser.add_argument("--browser", action="store_true",
+                        help="Enable AgentCore Browser tool (real Chromium, JS rendering, anti-bot)")
     parser.add_argument("--lang", choices=["zh", "en"], default="zh",
                         help="UI language (default: zh)")
     parser.add_argument("--timeout", type=int, default=180,
@@ -351,7 +436,8 @@ def main():
     # ── Single-shot mode (args on command line) ─────────────────────
     if args.request:
         prompt = " ".join(args.request)
-        run_one(prompt, args.skill, args.dev, args.timeout, args.output, t)
+        run_one(prompt, args.skill, args.dev, args.cloud, args.timeout, args.output, t,
+                use_browser=args.browser)
         return
 
     # ── Interactive loop ────────────────────────────────────────────
@@ -370,16 +456,20 @@ def main():
             print(t["empty"])
             continue
 
-        run_one(prompt, args.skill, args.dev, args.timeout, args.output, t)
+        run_one(prompt, args.skill, args.dev, args.cloud, args.timeout, args.output, t,
+                use_browser=args.browser)
         print()
 
 
-def run_one(prompt, skill, dev, timeout, output_file, t):
+def run_one(prompt, skill, dev, cloud, timeout, output_file, t, use_browser=False):
     """Execute a single crawl request and display results."""
     print(f"\n{YELLOW}{t['thinking']}{RESET}")
+    if use_browser:
+        print(f"{DIM}🌐 Browser mode enabled (real Chromium + JS rendering){RESET}")
 
     try:
-        response = invoke_agent(prompt, skill=skill, dev=dev, timeout=timeout)
+        response = invoke_agent(prompt, skill=skill, dev=dev, cloud=cloud, timeout=timeout,
+                                use_browser=use_browser)
     except subprocess.TimeoutExpired:
         print(f"{RED}{t['timeout'].format(timeout)}{RESET}")
         return
@@ -391,7 +481,9 @@ def run_one(prompt, skill, dev, timeout, output_file, t):
     skill_used = response.get("skill_used", "unknown")
     auto = response.get("auto_selected", True)
     mode = t["auto"] if auto else t["manual"]
-    print(f"{t['skill_used']}: {GREEN}{skill_used}{RESET} {DIM}{mode}{RESET}")
+    browser_used = response.get("browser_used", False)
+    browser_tag = f" {DIM}[browser]{RESET}" if browser_used else ""
+    print(f"{t['skill_used']}: {GREEN}{skill_used}{RESET} {DIM}{mode}{RESET}{browser_tag}")
 
     # ── Agent text response ─────────────────────────────────────────
     agent_text = extract_agent_text(response.get("result"))

@@ -1,0 +1,541 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CrawlAgentcore — One-click deployment of the natural-language web crawler on
+  AWS Bedrock AgentCore.  Creates: ECR repository, IAM execution role, CodeBuild
+  project (builds arm64 Docker image), AgentCore Code Interpreter, AgentCore
+  Browser, AgentCore Runtime + Endpoint, CloudWatch aws/spans log group, and
+  X-Ray → CloudWatch forwarding.  All AgentCore resources are managed via
+  Lambda-backed Custom Resources (no native CloudFormation support yet).
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Parameters
+# ─────────────────────────────────────────────────────────────────────────────
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: crawl-agentcore
+    Description: Prefix used for all resource names (lowercase, hyphens allowed).
+    AllowedPattern: ^[a-z][a-z0-9-]{2,30}$
+
+  GitHubSourceUrl:
+    Type: String
+    Description: >
+      HTTPS URL of the Git repository to build.
+      If you forked the project, replace with your fork URL.
+      Leave blank to use a local S3 source (set CodeBuildS3Bucket/Key).
+    Default: https://github.com/your-org/CrawlAgentcore.git
+
+  GitHubBranch:
+    Type: String
+    Default: main
+    Description: Branch to build from.
+
+  CodeBuildS3Bucket:
+    Type: String
+    Default: ''
+    Description: >
+      (Optional) S3 bucket containing a ZIP of the source code.
+      Used only when GitHubSourceUrl is blank.
+
+  CodeBuildS3Key:
+    Type: String
+    Default: ''
+    Description: S3 key of the source ZIP (only when using S3 source).
+
+  ImageTag:
+    Type: String
+    Default: latest
+    Description: Docker image tag to build and deploy.
+
+  AgentRuntimeEndpointName:
+    Type: String
+    Default: crawlerEndpoint
+    Description: Name for the AgentCore Runtime Endpoint.
+
+  ClaudeModelId:
+    Type: String
+    Default: us.anthropic.claude-sonnet-4-5
+    Description: >
+      Bedrock model ID for the Strands agent (inference profile or foundation model).
+      Default uses the cross-region inference profile for Claude Sonnet 4.5.
+
+  LambdaS3Bucket:
+    Type: String
+    Description: >
+      S3 bucket where the Lambda handler ZIP (cfn_handler.zip) was uploaded.
+      Run deploy/package.sh first to create and upload the ZIP.
+      Example: my-deploy-artifacts
+
+  LambdaS3Key:
+    Type: String
+    Default: crawl-agentcore/lambda/cfn_handler.zip
+    Description: S3 key of the Lambda handler ZIP file.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Conditions
+# ─────────────────────────────────────────────────────────────────────────────
+Conditions:
+  UseGitHubSource: !Not [!Equals [!Ref GitHubSourceUrl, '']]
+  UseS3Source:     !Not [!Equals [!Ref CodeBuildS3Bucket, '']]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Resources
+# ─────────────────────────────────────────────────────────────────────────────
+Resources:
+
+  # ── 1. ECR Repository ───────────────────────────────────────────────────────
+  EcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub '${ProjectName}'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 5 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 5
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ── 2. IAM Execution Role for AgentCore Runtime ──────────────────────────────
+  AgentCoreExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'AmazonBedrockAgentCoreRuntime-${ProjectName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BedrockInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: '*'
+        - PolicyName: AgentCoreCodeInterpreter
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:InvokeCodeInterpreter
+                Resource: !Sub 'arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:code-interpreter/*'
+        - PolicyName: AgentCoreBrowser
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:StartBrowserSession
+                  - bedrock-agentcore:StopBrowserSession
+                  - bedrock-agentcore:InvokeBrowser
+                  - bedrock-agentcore:UpdateBrowserStream
+                  - bedrock-agentcore:GetBrowserSession
+                Resource:
+                  - !Sub 'arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:browser-custom/*'
+                  - !Sub 'arn:aws:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:browser/*'
+        - PolicyName: XRayTracing
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutSpansForIndexing
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                Resource: '*'
+        - PolicyName: CloudWatchSpans
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogDelivery
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws/spans*'
+        - PolicyName: ECRPull
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ── 3. IAM Role for Lambda Custom Resource handlers ─────────────────────────
+  CustomResourceLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-cfn-custom-resource-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AgentCoreControlPlane
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:CreateCodeInterpreter
+                  - bedrock-agentcore:DeleteCodeInterpreter
+                  - bedrock-agentcore:GetCodeInterpreter
+                  - bedrock-agentcore:CreateBrowser
+                  - bedrock-agentcore:DeleteBrowser
+                  - bedrock-agentcore:GetBrowser
+                  - bedrock-agentcore:CreateAgentRuntime
+                  - bedrock-agentcore:DeleteAgentRuntime
+                  - bedrock-agentcore:GetAgentRuntime
+                  - bedrock-agentcore:CreateAgentRuntimeEndpoint
+                  - bedrock-agentcore:DeleteAgentRuntimeEndpoint
+                  - bedrock-agentcore:GetAgentRuntimeEndpoint
+                  - bedrock-agentcore:UpdateAgentRuntime
+                  - bedrock-agentcore:UpdateAgentRuntimeEndpoint
+                Resource: '*'
+        - PolicyName: XRaySetup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:UpdateTraceSegmentDestination
+                  - xray:GetTraceSegmentDestination
+                Resource: '*'
+        - PolicyName: CloudWatchSetup
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:PutResourcePolicy
+                  - logs:DeleteResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:CreateLogGroup
+                  - logs:DescribeLogGroups
+                Resource: '*'
+        - PolicyName: IAMPassRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt AgentCoreExecutionRole.Arn
+
+  # ── 4. IAM Role for CodeBuild ────────────────────────────────────────────────
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-codebuild-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ECRPush
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                Resource: '*'
+        - PolicyName: Logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+        - PolicyName: S3Source
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource:
+                  - !If
+                    - UseS3Source
+                    - !Sub 'arn:aws:s3:::${CodeBuildS3Bucket}/${CodeBuildS3Key}'
+                    - !Sub 'arn:aws:s3:::placeholder/none'
+
+  # ── 5. CloudWatch log group for spans ───────────────────────────────────────
+  SpansLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: aws/spans
+      RetentionInDays: 30
+
+  # ── 6. Lambda function: AgentCore Custom Resource handler ────────────────────
+  #       One function handles all AgentCore resource types.
+  CustomResourceFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: CustomResourceLambdaRole
+    Properties:
+      FunctionName: !Sub '${ProjectName}-cfn-handler'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt CustomResourceLambdaRole.Arn
+      Timeout: 900
+      MemorySize: 256
+      Environment:
+        Variables:
+          REGION: !Ref AWS::Region
+      Code:
+        S3Bucket: !Ref LambdaS3Bucket
+        S3Key: !Ref LambdaS3Key
+
+  # ── 7. CodeBuild project — builds & pushes arm64 Docker image ───────────────
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${ProjectName}-image-builder'
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: ARM_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-aarch64-standard:3.0
+        PrivilegedMode: true
+        EnvironmentVariables:
+          - Name: ECR_URI
+            Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrRepository}'
+          - Name: IMAGE_TAG
+            Value: !Ref ImageTag
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref AWS::Region
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+      Source:
+        Type: !If [UseGitHubSource, GITHUB, !If [UseS3Source, S3, NO_SOURCE]]
+        Location: !If
+          - UseGitHubSource
+          - !Ref GitHubSourceUrl
+          - !If
+            - UseS3Source
+            - !Sub '${CodeBuildS3Bucket}/${CodeBuildS3Key}'
+            - !Ref AWS::NoValue
+        BuildSpec: |
+          version: 0.2
+          phases:
+            pre_build:
+              commands:
+                - echo Logging in to Amazon ECR...
+                - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_URI
+                - docker buildx create --use --driver docker-container || true
+            build:
+              commands:
+                - echo Building arm64 image...
+                - docker buildx build
+                    --platform linux/arm64
+                    --tag $ECR_URI:$IMAGE_TAG
+                    --tag $ECR_URI:latest
+                    --push .
+            post_build:
+              commands:
+                - echo Build complete.
+                - echo $ECR_URI:$IMAGE_TAG
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ── 8. AgentCore Code Interpreter ────────────────────────────────────────────
+  CodeInterpreterResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - CustomResourceFunction
+      - AgentCoreExecutionRole
+    Properties:
+      ServiceToken: !GetAtt CustomResourceFunction.Arn
+      ResourceType: CodeInterpreter
+      Name: !Sub '${ProjectName}-ci'
+      ExecutionRoleArn: !GetAtt AgentCoreExecutionRole.Arn
+      NetworkMode: PUBLIC
+
+  # ── 9. AgentCore Browser ─────────────────────────────────────────────────────
+  BrowserResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - CustomResourceFunction
+      - AgentCoreExecutionRole
+    Properties:
+      ServiceToken: !GetAtt CustomResourceFunction.Arn
+      ResourceType: Browser
+      Name: !Sub '${ProjectName}-browser'
+      ExecutionRoleArn: !GetAtt AgentCoreExecutionRole.Arn
+      NetworkMode: PUBLIC
+
+  # ── 10. X-Ray → CloudWatch forwarding (one-time setup) ───────────────────────
+  XRayCloudWatchSetup:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - CustomResourceFunction
+      - SpansLogGroup
+    Properties:
+      ServiceToken: !GetAtt CustomResourceFunction.Arn
+      ResourceType: XRayCloudWatchSetup
+
+  # ── 11. CloudWatch resource policy for aws/spans ─────────────────────────────
+  SpansLogGroupResourcePolicy:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - CustomResourceFunction
+      - SpansLogGroup
+    Properties:
+      ServiceToken: !GetAtt CustomResourceFunction.Arn
+      ResourceType: CloudWatchResourcePolicy
+      PolicyName: !Sub '${ProjectName}-xray-logs-policy'
+
+  # ── 12. AgentCore Runtime ─────────────────────────────────────────────────────
+  #   NOTE: The image must be built and pushed (via CodeBuild) BEFORE this
+  #         resource is created.  Use the DeploymentPipeline or trigger
+  #         CodeBuild manually, then re-run this stack update.
+  #
+  #   The EnvironmentVariablesJson encodes the env vars as a JSON string
+  #   so they can be passed through CFN Properties cleanly.
+  AgentRuntimeResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - CustomResourceFunction
+      - AgentCoreExecutionRole
+      - CodeInterpreterResource
+      - BrowserResource
+    Properties:
+      ServiceToken: !GetAtt CustomResourceFunction.Arn
+      ResourceType: AgentRuntime
+      Name: !Sub '${ProjectName}-runtime'
+      ContainerUri: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrRepository}:${ImageTag}'
+      RoleArn: !GetAtt AgentCoreExecutionRole.Arn
+      NetworkMode: PUBLIC
+      ServerProtocol: HTTP
+      EnvironmentVariablesJson: !Sub
+        - '{"CODE_INTERPRETER_ID":"${CiId}","BROWSER_ID":"${BrId}","AWS_REGION":"${AWS::Region}","OTEL_SERVICE_NAME":"${ProjectName}"}'
+        - CiId: !GetAtt CodeInterpreterResource.CodeInterpreterId
+          BrId: !GetAtt BrowserResource.BrowserId
+
+  # ── 13. AgentCore Runtime Endpoint ───────────────────────────────────────────
+  AgentRuntimeEndpointResource:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn:
+      - AgentRuntimeResource
+    Properties:
+      ServiceToken: !GetAtt CustomResourceFunction.Arn
+      ResourceType: AgentRuntimeEndpoint
+      AgentRuntimeId: !GetAtt AgentRuntimeResource.AgentRuntimeId
+      EndpointName: !Ref AgentRuntimeEndpointName
+      AgentRuntimeVersion: LATEST
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Outputs
+# ─────────────────────────────────────────────────────────────────────────────
+Outputs:
+
+  EcrRepositoryUri:
+    Description: ECR repository URI for the crawler image
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrRepository}'
+
+  AgentCoreExecutionRoleArn:
+    Description: IAM execution role ARN used by the AgentCore Runtime
+    Value: !GetAtt AgentCoreExecutionRole.Arn
+
+  CodeInterpreterArn:
+    Description: AgentCore Code Interpreter ARN
+    Value: !GetAtt CodeInterpreterResource.CodeInterpreterArn
+
+  CodeInterpreterId:
+    Description: AgentCore Code Interpreter ID (use as CODE_INTERPRETER_ID env var)
+    Value: !GetAtt CodeInterpreterResource.CodeInterpreterId
+
+  BrowserArn:
+    Description: AgentCore Browser ARN
+    Value: !GetAtt BrowserResource.BrowserArn
+
+  BrowserId:
+    Description: AgentCore Browser ID (use as BROWSER_ID env var)
+    Value: !GetAtt BrowserResource.BrowserId
+
+  AgentRuntimeArn:
+    Description: AgentCore Runtime ARN
+    Value: !GetAtt AgentRuntimeResource.AgentRuntimeArn
+
+  AgentRuntimeId:
+    Description: AgentCore Runtime ID
+    Value: !GetAtt AgentRuntimeResource.AgentRuntimeId
+
+  AgentRuntimeEndpointArn:
+    Description: AgentCore Runtime Endpoint ARN
+    Value: !GetAtt AgentRuntimeEndpointResource.EndpointArn
+
+  EndpointName:
+    Description: AgentCore Runtime Endpoint name (use as qualifier in invoke_agent_runtime)
+    Value: !GetAtt AgentRuntimeEndpointResource.EndpointName
+
+  CodeBuildProjectName:
+    Description: CodeBuild project name — trigger a build to push the Docker image
+    Value: !Ref CodeBuildProject
+
+  InvokeExample:
+    Description: Example boto3 invocation (replace <PROMPT> with your request)
+    Value: !Sub |
+      import boto3, json
+      client = boto3.client("bedrock-agentcore", region_name="${AWS::Region}")
+      resp = client.invoke_agent_runtime(
+          agentRuntimeArn="${AgentRuntimeResource.AgentRuntimeArn}",
+          qualifier="${AgentRuntimeEndpointName}",
+          runtimeSessionId="session-1",
+          contentType="application/json",
+          accept="application/json",
+          payload=json.dumps({"prompt": "<PROMPT>"}).encode(),
+      )
+      print(json.loads(resp["response"].read()))
