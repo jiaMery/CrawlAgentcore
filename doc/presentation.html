@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CrawlAgentcore — AWS Bedrock AgentCore 自然语言爬虫</title>
+  <title>基于 AWS AgentCore 的智能爬虫方案</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
@@ -11,730 +11,921 @@
     :root {
       --aws-orange: #FF9900;
       --aws-dark:   #232F3E;
-      --aws-blue:   #1A73E8;
-      --accent:     #00D4FF;
+      --aws-blue:   #4A90D9;
+      --accent:     #00C7B1;
+      --danger:     #FF6B6B;
+      --success:    #6BCB77;
+      --warn:       #FFD93D;
     }
 
-    .reveal { font-family: 'Segoe UI', system-ui, sans-serif; }
-
-    .reveal h1, .reveal h2, .reveal h3 {
-      color: var(--aws-orange);
-      text-transform: none;
-      letter-spacing: -0.02em;
-    }
-
+    .reveal { font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif; }
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; letter-spacing: -0.02em; color: #fff; }
     .reveal .slides section { text-align: left; }
-
-    /* Title slide */
-    .title-slide { text-align: center !important; }
-    .title-slide h1 { font-size: 2em; color: var(--aws-orange); margin-bottom: 0.2em; }
-    .title-slide .subtitle { color: #ccc; font-size: 0.9em; margin-bottom: 1em; }
-    .title-slide .badges span {
-      display: inline-block;
-      background: var(--aws-dark);
-      border: 1px solid var(--aws-orange);
-      border-radius: 4px;
-      padding: 4px 12px;
-      margin: 4px;
-      font-size: 0.65em;
-      color: var(--aws-orange);
-    }
-
-    /* Pill tags */
-    .pill {
-      display: inline-block;
-      background: rgba(255,153,0,0.15);
-      border: 1px solid var(--aws-orange);
-      border-radius: 20px;
-      padding: 2px 10px;
-      font-size: 0.6em;
-      color: var(--aws-orange);
-      vertical-align: middle;
-      margin-left: 6px;
-    }
-    .pill-blue {
-      background: rgba(0,212,255,0.1);
-      border-color: var(--accent);
-      color: var(--accent);
-    }
-
-    /* Two-column layout */
-    .cols { display: flex; gap: 2em; align-items: flex-start; }
-    .cols > * { flex: 1; }
-
-    /* Highlight box */
-    .box {
-      background: rgba(255,153,0,0.08);
-      border-left: 3px solid var(--aws-orange);
-      padding: 0.6em 1em;
-      border-radius: 0 6px 6px 0;
-      margin: 0.5em 0;
-      font-size: 0.75em;
-    }
-    .box-blue {
-      background: rgba(0,212,255,0.08);
-      border-left-color: var(--accent);
-    }
-    .box-green {
-      background: rgba(0,200,100,0.08);
-      border-left-color: #00C864;
-    }
-
-    /* Table styling */
-    .reveal table { font-size: 0.65em; width: 100%; border-collapse: collapse; }
-    .reveal table th {
-      background: var(--aws-dark);
-      color: var(--aws-orange);
-      padding: 6px 10px;
-      text-align: left;
-    }
-    .reveal table td { padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-    .reveal table tr:hover td { background: rgba(255,153,0,0.05); }
-
-    /* Code block override */
-    .reveal pre { font-size: 0.55em; box-shadow: none; background: #0d1117; border-radius: 6px; }
-    .reveal code { font-family: 'Fira Code', 'Cascadia Code', monospace; }
-
-    /* Architecture diagram */
-    .arch-box {
-      border: 1px solid rgba(255,153,0,0.4);
-      border-radius: 8px;
-      padding: 8px 14px;
-      margin: 4px 0;
-      font-size: 0.62em;
-      background: rgba(255,153,0,0.06);
-    }
-    .arch-arrow { text-align: center; color: var(--aws-orange); font-size: 1.2em; margin: 2px 0; }
-
-    /* Stats */
-    .stat { text-align: center; padding: 10px; }
-    .stat .num { font-size: 2.2em; color: var(--aws-orange); font-weight: bold; line-height: 1; }
-    .stat .label { font-size: 0.6em; color: #aaa; }
-
-    /* Tier table colors */
-    .strict { color: #FF6B6B; }
-    .moderate { color: #FFD93D; }
-    .open { color: #6BCB77; }
-
     .reveal ul { margin-left: 1.2em; }
-    .reveal ul li { margin-bottom: 0.3em; font-size: 0.78em; }
+    .reveal ul li { margin-bottom: 0.35em; font-size: 0.76em; line-height: 1.5; }
+    .reveal pre { font-size: 0.52em; box-shadow: none; background: #0d1117; border-radius: 6px; margin: 0.4em 0; }
+    .reveal code { font-family: 'Fira Code', 'Cascadia Code', monospace; }
+    .reveal table { font-size: 0.64em; width: 100%; border-collapse: collapse; }
+    .reveal table th { background: #1a2332; color: var(--aws-orange); padding: 7px 10px; text-align: left; border-bottom: 2px solid var(--aws-orange); }
+    .reveal table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.08); vertical-align: top; }
+    .reveal table tr:hover td { background: rgba(255,153,0,0.04); }
+    .reveal a { color: var(--aws-orange); }
 
-    .section-label {
-      position: absolute;
-      top: 0; right: 0;
-      background: var(--aws-orange);
-      color: #000;
-      font-size: 0.45em;
-      padding: 3px 10px;
-      border-radius: 0 0 0 6px;
-      font-weight: bold;
-      letter-spacing: 0.05em;
-    }
+    /* ── Title slide ── */
+    .title-slide { text-align: center !important; background: radial-gradient(ellipse at center, #1a2b3c 0%, #0a1520 100%) !important; }
+    .title-slide .eyebrow { color: var(--aws-orange); font-size: 0.55em; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.6em; }
+    .title-slide h1 { font-size: 1.9em; color: #fff; line-height: 1.15; margin-bottom: 0.15em; }
+    .title-slide .sub { color: #8fb3d4; font-size: 0.75em; margin-bottom: 1.2em; }
+    .badge { display: inline-block; background: rgba(255,153,0,0.12); border: 1px solid rgba(255,153,0,0.4); border-radius: 3px; padding: 3px 10px; margin: 3px; font-size: 0.56em; color: var(--aws-orange); }
+
+    /* ── Section header ── */
+    .section-slide { background: linear-gradient(135deg, #1a2b3c 0%, #0d1f30 100%) !important; text-align: center !important; }
+    .section-slide .num { font-size: 3em; color: rgba(255,153,0,0.2); font-weight: 900; line-height: 1; }
+    .section-slide h2 { color: var(--aws-orange); font-size: 1.6em; margin-top: 0; }
+    .section-slide .desc { color: #8fb3d4; font-size: 0.7em; }
+
+    /* ── Chip label ── */
+    .chip { position: absolute; top: 0; right: 0; background: var(--aws-orange); color: #000; font-size: 0.42em; font-weight: 700; padding: 4px 12px; border-radius: 0 0 0 8px; letter-spacing: 0.06em; text-transform: uppercase; }
+
+    /* ── Layout ── */
+    .cols { display: flex; gap: 1.6em; align-items: flex-start; }
+    .cols > * { flex: 1; min-width: 0; }
+
+    /* ── Cards ── */
+    .card { border-radius: 8px; padding: 0.8em 1em; margin: 0.4em 0; font-size: 0.72em; line-height: 1.6; }
+    .card-orange { background: rgba(255,153,0,0.08); border: 1px solid rgba(255,153,0,0.3); }
+    .card-blue   { background: rgba(74,144,217,0.08); border: 1px solid rgba(74,144,217,0.3); }
+    .card-green  { background: rgba(107,203,119,0.08); border: 1px solid rgba(107,203,119,0.3); }
+    .card-red    { background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.3); }
+    .card-teal   { background: rgba(0,199,177,0.08); border: 1px solid rgba(0,199,177,0.3); }
+    .card h4 { margin: 0 0 0.3em; font-size: 1em; }
+    .card-orange h4 { color: var(--aws-orange); }
+    .card-blue   h4 { color: var(--aws-blue); }
+    .card-green  h4 { color: var(--success); }
+    .card-red    h4 { color: var(--danger); }
+    .card-teal   h4 { color: var(--accent); }
+
+    /* ── Stats ── */
+    .stat-row { display: flex; gap: 0.8em; margin: 0.6em 0; }
+    .stat { flex: 1; text-align: center; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.6em 0.4em; }
+    .stat .n { font-size: 1.8em; font-weight: 700; color: var(--aws-orange); line-height: 1.1; }
+    .stat .l { font-size: 0.52em; color: #8fb3d4; margin-top: 2px; }
+
+    /* ── Pain point list ── */
+    .pain { display: flex; align-items: flex-start; gap: 0.6em; margin: 0.4em 0; font-size: 0.72em; }
+    .pain .icon { font-size: 1.1em; flex-shrink: 0; margin-top: 0.1em; }
+    .pain .text { line-height: 1.5; }
+
+    /* ── Comparison ── */
+    .vs-table { width: 100%; border-collapse: collapse; font-size: 0.62em; }
+    .vs-table th { padding: 8px 12px; text-align: center; font-size: 1em; }
+    .vs-table td { padding: 7px 12px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .vs-table td:first-child { color: #8fb3d4; font-weight: 500; }
+    .vs-table td:nth-child(2) { text-align: center; }
+    .vs-table td:nth-child(3) { text-align: center; }
+    .ec2-col { background: rgba(255,107,107,0.05); }
+    .ac-col  { background: rgba(107,203,119,0.05); }
+    .win  { color: var(--success); font-weight: 600; }
+    .lose { color: var(--danger); }
+    .neu  { color: var(--warn); }
+
+    /* ── Architecture boxes ── */
+    .arch { border: 1px solid rgba(255,153,0,0.25); border-radius: 8px; padding: 0.5em 0.8em; margin: 0.25em 0; font-size: 0.64em; background: rgba(255,153,0,0.04); }
+    .arch-accent { border-color: rgba(0,199,177,0.35); background: rgba(0,199,177,0.04); }
+    .arch-blue   { border-color: rgba(74,144,217,0.35); background: rgba(74,144,217,0.04); }
+    .arch-arrow  { text-align: center; color: rgba(255,153,0,0.6); font-size: 1.1em; margin: 1px 0; line-height: 1; }
+
+    /* ── Cost table ── */
+    .cost-total { background: rgba(255,153,0,0.12); border: 1px solid var(--aws-orange); border-radius: 6px; padding: 0.6em 1em; text-align: center; margin-top: 0.6em; }
+    .cost-total .amount { font-size: 1.8em; color: var(--aws-orange); font-weight: 700; }
+    .cost-total .label  { font-size: 0.55em; color: #8fb3d4; }
+
+    /* ── Tier ── */
+    .strict   { color: var(--danger); }
+    .moderate { color: var(--warn); }
+    .open     { color: var(--success); }
+
+    /* ── Divider ── */
+    .divider { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 0.6em 0; }
+
+    /* ── Footer note ── */
+    .footnote { font-size: 0.48em; color: #5a7a9a; margin-top: 0.5em; }
   </style>
 </head>
 <body>
 <div class="reveal">
 <div class="slides">
 
-<!-- ═══════════════════════════ SLIDE 1: TITLE ═══════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 1: TITLE
+══════════════════════════════════════════════════════ -->
 <section class="title-slide">
-  <h1>CrawlAgentcore</h1>
-  <div class="subtitle">AWS Bedrock AgentCore 自然语言智能爬虫</div>
-  <div class="badges">
-    <span>Strands Agents</span>
-    <span>AgentCore Runtime</span>
-    <span>Code Interpreter</span>
-    <span>AgentCore Browser</span>
-    <span>OpenTelemetry / X-Ray</span>
-    <span>linux/arm64</span>
+  <div class="eyebrow">AWS 解决方案架构</div>
+  <h1>基于 AWS AgentCore<br>的智能爬虫方案</h1>
+  <div class="sub">面向企业数据采集场景的全托管 AI 原生架构</div>
+  <div>
+    <span class="badge">Amazon Bedrock AgentCore</span>
+    <span class="badge">Strands Agents</span>
+    <span class="badge">Claude Sonnet</span>
+    <span class="badge">Code Interpreter</span>
+    <span class="badge">AgentCore Browser</span>
+    <span class="badge">OpenTelemetry / X-Ray</span>
   </div>
   <br>
-  <div style="color:#888; font-size:0.55em;">
-    用自然语言描述目标 → Agent 自动选择技能 → 结构化 JSON 输出
+  <div style="font-size:0.52em; color:#4a6a8a">
+    AWS Solutions Architect Presentation &nbsp;|&nbsp; 2026
   </div>
 </section>
 
-<!-- ═══════════════════════════ SLIDE 2: PROBLEM ════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 2: AGENDA
+══════════════════════════════════════════════════════ -->
 <section>
-  <div class="section-label">背景</div>
+  <div class="chip">议程</div>
+  <h2>今天的议题</h2>
+  <div class="cols" style="margin-top: 0.5em">
+    <div>
+      <div class="card card-teal">
+        <h4>01 &nbsp;AWS AgentCore 是什么</h4>
+        产品定位、核心组件与能力全览
+      </div>
+      <div class="card card-orange">
+        <h4>02 &nbsp;客户需求</h4>
+        企业智能数据采集场景及核心诉求
+      </div>
+      <div class="card card-red">
+        <h4>03 &nbsp;传统爬虫的痛点</h4>
+        自建方案面临的技术与运维挑战
+      </div>
+    </div>
+    <div>
+      <div class="card card-blue">
+        <h4>04 &nbsp;方案对比</h4>
+        EC2 自建 vs AWS AgentCore 全托管
+      </div>
+      <div class="card card-orange">
+        <h4>05 &nbsp;AgentCore 方案架构</h4>
+        核心组件、工作流程与技术亮点
+      </div>
+      <div class="card card-green">
+        <h4>06 &nbsp;成本估算 & 总结</h4>
+        基于真实 AWS 定价的 TCO 对比分析
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 3: WHAT IS AGENTCORE
+══════════════════════════════════════════════════════ -->
+<section class="section-slide">
+  <div class="num" style="font-size:2em">☁️</div>
+  <h2>什么是 AWS AgentCore？</h2>
+  <div class="desc">生产级 AI Agent 基础设施平台</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 4: AgentCore 产品介绍
+══════════════════════════════════════════════════════ -->
+<section>
+  <div class="chip">AgentCore 介绍</div>
+  <h2>AWS AgentCore — 面向生产的 AI Agent 平台</h2>
+  <div class="cols">
+    <div>
+      <div class="card card-orange" style="margin-bottom:0.5em; font-size:0.72em">
+        <h4>产品定位</h4>
+        <em style="color:#ccc">"The platform for production AI agents.<br>Any framework. Any model. Secure at scale."</em><br><br>
+        解决将 AI Agent 推向生产环境的<strong>基础设施挑战</strong>——连接、保护、调试和弹性扩展，无需重构现有系统
+      </div>
+      <div class="card card-blue" style="font-size:0.68em">
+        <h4>支持任意框架 & 模型</h4>
+        LangChain · OpenAI Agents SDK · Claude Agent SDK · Strands SDK · 自定义框架<br>
+        本地运行的代码可直接部署到生产环境，无需改写
+      </div>
+    </div>
+    <div>
+      <div class="card card-teal" style="font-size:0.68em; margin-bottom:0.4em">
+        <h4>🚀 三大核心能力</h4>
+        <strong>Ship Fast</strong> — 任意框架/模型，本地代码直接上生产<br>
+        <strong>Connect & Control</strong> — 统一集成 MCP Server、知识库、API、Lambda，内置认证<br>
+        <strong>Debug & Optimize</strong> — 追踪 Agent 每步操作，支持基于真实流量的 A/B 测试
+      </div>
+      <div class="card card-green" style="font-size:0.65em">
+        <h4>📊 客户落地数据</h4>
+        <table style="font-size:0.95em; margin-top:0.3em">
+          <tr><td style="color:#8fb3d4">Cox Automotive</td><td>不到 1 年上线 <strong>17 个</strong>生产级 AI Agent</td></tr>
+          <tr><td style="color:#8fb3d4">Druva</td><td><strong>68%</strong> 支持问题无需人工干预</td></tr>
+          <tr><td style="color:#8fb3d4">Thomson Reuters</td><td>平台工程实现 <strong>70%</strong> 自动化</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 5: AgentCore 核心组件
+══════════════════════════════════════════════════════ -->
+<section>
+  <div class="chip">AgentCore 组件</div>
+  <h2>AgentCore 核心组件全览</h2>
+  <div class="cols">
+    <div>
+      <div class="arch" style="margin-bottom:0.4em">
+        <strong style="color:var(--aws-orange)">⚡ AgentCore Runtime</strong><br>
+        <span style="color:#8fb3d4">托管 Agent 容器运行时，支持 HTTP 协议，弹性扩展；I/O 等待期间不计费；按实际 CPU/内存秒级计费</span>
+      </div>
+      <div class="arch" style="margin-bottom:0.4em">
+        <strong style="color:var(--aws-orange)">🐍 Code Interpreter</strong><br>
+        <span style="color:#8fb3d4">隔离沙箱执行 LLM 生成的 Python/JS 代码；内置 requests、pandas、numpy 等常用库；每次执行后自动清理</span>
+      </div>
+      <div class="arch arch-accent" style="margin-bottom:0.4em">
+        <strong style="color:var(--accent)">🌐 AgentCore Browser</strong><br>
+        <span style="color:#5a9a90">托管 Chromium 实例，支持 CDP WebSocket 自动化；JS 渲染、截图、表单操作；按使用时长计费</span>
+      </div>
+      <div class="arch arch-blue" style="margin-bottom:0.4em">
+        <strong style="color:var(--aws-blue)">🧠 Memory</strong><br>
+        <span style="color:#5a7aaa">跨会话持久化 Agent 记忆；支持短期（对话内）和长期（跨对话）两种模式；自动语义检索</span>
+      </div>
+    </div>
+    <div>
+      <div class="arch" style="margin-bottom:0.4em">
+        <strong style="color:var(--aws-orange)">🔌 Gateway（MCP 网关）</strong><br>
+        <span style="color:#8fb3d4">将内部 API、Lambda 函数、知识库统一暴露为 MCP Server；Agent 通过标准协议调用任意工具</span>
+      </div>
+      <div class="arch" style="margin-bottom:0.4em">
+        <strong style="color:var(--aws-orange)">🔐 Identity & Auth</strong><br>
+        <span style="color:#8fb3d4">原生 IAM 集成；自动化推理验证访问策略（与 S3/IAM 同底层技术）；支持 OAuth / API Key</span>
+      </div>
+      <div class="arch" style="margin-bottom:0.4em">
+        <strong style="color:var(--aws-orange)">🔭 Observability（可观测性）</strong><br>
+        <span style="color:#8fb3d4">OTLP → AWS X-Ray → CloudWatch；追踪 Agent 每步操作和工具调用；支持 A/B 测试</span>
+      </div>
+      <div class="card card-teal" style="font-size:0.62em; margin-top:0.5em">
+        🔒 <strong>企业级安全</strong>：所有组件均与 IAM 深度集成，支持 VPC 私网部署，多区域高可用，内置合规支持（SOC、ISO、HIPAA）
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE —— 原 SLIDE 3: SECTION — 客户需求
+══════════════════════════════════════════════════════ -->
+<section class="section-slide">
+  <div class="num">01</div>
+  <h2>客户需求</h2>
+  <div class="desc">企业数据采集面临的真实业务场景</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 4: 客户需求详情
+══════════════════════════════════════════════════════ -->
+<section>
+  <div class="chip">客户需求</div>
+  <h2>我们的客户需要什么？</h2>
+  <div class="cols">
+    <div>
+      <p style="font-size:0.7em; color:#8fb3d4; margin-bottom:0.5em">典型业务场景</p>
+      <div class="pain">
+        <span class="icon">🛍️</span>
+        <div class="text"><strong>电商价格监控</strong><br>实时采集竞品价格、库存、评分，支撑定价决策</div>
+      </div>
+      <div class="pain">
+        <span class="icon">📰</span>
+        <div class="text"><strong>资讯与舆情分析</strong><br>跨平台抓取新闻、社媒内容，自动分类汇总</div>
+      </div>
+      <div class="pain">
+        <span class="icon">📊</span>
+        <div class="text"><strong>行业数据采集</strong><br>定期爬取招聘信息、房产数据、金融行情等结构化数据</div>
+      </div>
+      <div class="pain">
+        <span class="icon">🔬</span>
+        <div class="text"><strong>科研数据获取</strong><br>从学术平台、政府公开数据源批量下载结构化数据</div>
+      </div>
+    </div>
+    <div>
+      <p style="font-size:0.7em; color:#8fb3d4; margin-bottom:0.5em">核心诉求</p>
+      <div class="card card-orange">
+        <h4>💬 自然语言驱动</h4>
+        非技术人员也能描述需求，无需手写爬虫代码
+      </div>
+      <div class="card card-orange">
+        <h4>🌐 广泛站点覆盖</h4>
+        静态页面、JS 渲染 SPA、需登录的平台均可抓取
+      </div>
+      <div class="card card-orange">
+        <h4>📦 结构化输出</h4>
+        直接返回可用 JSON，无需二次清洗
+      </div>
+      <div class="card card-orange">
+        <h4>⚙️ 低运维负担</h4>
+        无服务器托管，弹性扩展，无需维护爬虫基础设施
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 5: SECTION — 传统痛点
+══════════════════════════════════════════════════════ -->
+<section class="section-slide">
+  <div class="num">02</div>
   <h2>传统爬虫的痛点</h2>
+  <div class="desc">自建方案在规模化落地时面临的系统性挑战</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 6: 痛点详情
+══════════════════════════════════════════════════════ -->
+<section>
+  <div class="chip">传统痛点</div>
+  <h2>为什么传统爬虫难以规模化？</h2>
   <div class="cols">
     <div>
-      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
-        ❌ 每个目标网站需要手写定制爬虫脚本
+      <div class="card card-red">
+        <h4>🔧 开发成本高</h4>
+        每个目标站点需定制爬虫代码；网站改版后需重写选择器；技术门槛高，依赖专职工程师维护
       </div>
-      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
-        ❌ 反爬虫策略需要人工调整并发和延迟
+      <div class="card card-red">
+        <h4>🛡️ 反爬对抗复杂</h4>
+        需人工调整 User-Agent、IP 轮换、请求频率；遭遇 CAPTCHA、JS 指纹检测时束手无策；维护成本随站点数量线性增长
       </div>
-      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
-        ❌ JS 渲染页面需要额外部署 Selenium/Playwright
-      </div>
-      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
-        ❌ 中文/CJK 字符编码损坏问题
-      </div>
-      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
-        ❌ 无可观测性，调试困难
+      <div class="card card-red">
+        <h4>🌐 JS 渲染页面困难</h4>
+        React/Vue SPA 用 requests 只能得到空白 HTML；需自建 Selenium/Playwright 集群，资源消耗大
       </div>
     </div>
     <div>
-      <div class="box-green box">
-        ✅ 自然语言描述 → 自动生成并执行爬虫代码
+      <div class="card card-red">
+        <h4>⚙️ 运维负担重</h4>
+        需自建调度系统、监控告警、失败重试；EC2/容器集群需 7×24 维护；扩容缩容需手动操作
       </div>
-      <div class="box-green box">
-        ✅ 按域名自动分级，智能调整并发策略
+      <div class="card card-red">
+        <h4>🀄 编码问题频发</h4>
+        中文/日文等 CJK 字符在传输过程中乱码；charset 自动检测不准确导致数据损坏
       </div>
-      <div class="box-green box">
-        ✅ 托管 Chromium，真实 JS 渲染 + 反爬绕过
-      </div>
-      <div class="box-green box">
-        ✅ 多层编码管道，完整 CJK/Unicode 支持
-      </div>
-      <div class="box-green box">
-        ✅ OpenTelemetry → X-Ray → CloudWatch 全链路追踪
+      <div class="card card-red">
+        <h4>📊 可观测性缺失</h4>
+        无法追踪爬取任务耗时分布；异常定位困难，依赖日志人工排查
       </div>
     </div>
   </div>
+  <div class="footnote">* 以上痛点来源于典型企业自建爬虫项目的真实运营反馈</div>
 </section>
 
-<!-- ═══════════════════════════ SLIDE 3: ARCHITECTURE ═══════════════════ -->
-<section>
-  <div class="section-label">架构</div>
-  <h2>系统架构</h2>
-  <div class="cols">
-    <div style="flex: 1.2">
-      <div class="arch-box" style="border-color:var(--accent)">
-        🖥️ <strong>crawler_cli.py</strong> — 本地 CLI 客户端<br>
-        <span style="color:#888; font-size:0.9em">--dev / --cloud / --browser / --skill / --output</span>
-      </div>
-      <div class="arch-arrow">⬇ HTTPS invoke_agent_runtime</div>
-      <div class="arch-box">
-        ☁️ <strong>AgentCore Runtime Endpoint</strong><br>
-        <span style="color:#888; font-size:0.9em">Docker linux/arm64 容器 · FastAPI/Uvicorn</span>
-      </div>
-      <div class="arch-arrow">⬇</div>
-      <div class="arch-box">
-        🤖 <strong>Strands Agent</strong> (Claude Sonnet via Bedrock)<br>
-        <span style="color:#888; font-size:0.9em">_auto_select_skill → 生成爬虫代码 → 执行</span>
-      </div>
-      <div class="arch-arrow">⬇ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ⬇</div>
-      <div class="cols" style="gap:0.5em">
-        <div class="arch-box" style="text-align:center">
-          ⚙️ <strong>Code Interpreter</strong><br>
-          <span style="color:#888; font-size:0.9em">requests + BS4<br>静态页面</span>
-        </div>
-        <div class="arch-box" style="text-align:center; border-color:var(--accent)">
-          🌐 <strong>AgentCore Browser</strong><br>
-          <span style="color:#888; font-size:0.9em">托管 Chromium<br>JS 渲染 / 反爬</span>
-        </div>
-      </div>
-    </div>
-    <div style="flex: 0.8">
-      <div class="arch-box" style="border-color:#FF9900">
-        📊 <strong>可观测性</strong><br>
-        <span style="color:#888; font-size:0.9em">
-          OTLPSpanExporter<br>
-          ↓ SigV4 (_RefreshingAWS4Auth)<br>
-          AWS X-Ray OTLP<br>
-          ↓<br>
-          CloudWatch Logs (aws/spans)<br>
-          ↓<br>
-          observe.py 查看追踪
-        </span>
-      </div>
-      <br>
-      <div class="arch-box" style="border-color:#6BCB77">
-        🐳 <strong>构建 & 部署</strong><br>
-        <span style="color:#888; font-size:0.9em">
-          docker buildx<br>
-          --platform linux/arm64<br>
-          → ECR → AgentCore Runtime
-        </span>
-      </div>
-    </div>
-  </div>
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 7: SECTION — 方案对比
+══════════════════════════════════════════════════════ -->
+<section class="section-slide">
+  <div class="num">03</div>
+  <h2>方案对比</h2>
+  <div class="desc">EC2 自建爬虫 vs AWS AgentCore 全托管方案</div>
 </section>
 
-<!-- ═══════════════════════════ SLIDE 4: AWS INFRA ══════════════════════ -->
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 8: 对比表格
+══════════════════════════════════════════════════════ -->
 <section>
-  <div class="section-label">基础设施</div>
-  <h2>AWS 资源总览</h2>
-  <table>
+  <div class="chip">方案对比</div>
+  <h2>EC2 自建 vs AgentCore 全托管</h2>
+  <table class="vs-table">
     <tr>
-      <th>资源类型</th>
-      <th>环境变量</th>
-      <th>说明</th>
+      <th style="width:22%; text-align:left; color:#8fb3d4">对比维度</th>
+      <th style="width:39%" class="ec2-col">🖥️ EC2 自建方案</th>
+      <th style="width:39%" class="ac-col">☁️ AWS AgentCore 方案</th>
     </tr>
     <tr>
-      <td>AgentCore Runtime</td>
-      <td><code>$AGENTCORE_RUNTIME_ID</code></td>
-      <td>运行爬虫容器的托管运行时</td>
+      <td>爬虫代码编写</td>
+      <td class="ec2-col lose">❌ 每个站点手写，维护成本高</td>
+      <td class="ac-col win">✅ LLM 自动生成，自然语言描述即可</td>
     </tr>
     <tr>
-      <td>Runtime Endpoint</td>
-      <td><code>$AGENTCORE_ENDPOINT_NAME</code></td>
-      <td>对外暴露的调用端点</td>
+      <td>JS 渲染支持</td>
+      <td class="ec2-col lose">❌ 需自建 Selenium/Playwright 集群</td>
+      <td class="ac-col win">✅ AgentCore Browser 托管 Chromium，开箱即用</td>
     </tr>
     <tr>
-      <td>Code Interpreter</td>
-      <td><code>$CODE_INTERPRETER_ID</code></td>
-      <td>执行 Python 爬虫脚本的沙箱</td>
+      <td>反爬虫策略</td>
+      <td class="ec2-col lose">❌ 人工调试延迟、IP 轮换、UA 等</td>
+      <td class="ac-col win">✅ 按域名自动分级（STRICT/MODERATE/OPEN），内置 UA 轮换</td>
     </tr>
     <tr>
-      <td>AgentCore Browser</td>
-      <td><code>$BROWSER_ID</code></td>
-      <td>托管 Chromium 实例 (CDP WebSocket)</td>
+      <td>基础设施运维</td>
+      <td class="ec2-col lose">❌ 需维护 EC2 集群、调度器、监控</td>
+      <td class="ac-col win">✅ 完全托管，零运维，按实际计算量计费</td>
     </tr>
     <tr>
-      <td>ECR Repository</td>
-      <td><code>$AWS_ACCOUNT_ID / $AWS_REGION</code></td>
-      <td>arm64 Docker 镜像仓库</td>
+      <td>弹性扩展</td>
+      <td class="ec2-col neu">⚠️ 需手动扩容或配置 Auto Scaling</td>
+      <td class="ac-col win">✅ 自动弹性，空闲不计费</td>
     </tr>
     <tr>
-      <td>IAM Role</td>
-      <td>—</td>
-      <td>Runtime 执行角色（Bedrock + X-Ray + Browser）</td>
+      <td>可观测性</td>
+      <td class="ec2-col neu">⚠️ 需自建日志/监控体系</td>
+      <td class="ac-col win">✅ OTLP → X-Ray → CloudWatch 原生集成</td>
     </tr>
     <tr>
-      <td>CloudWatch Logs</td>
-      <td>—</td>
-      <td><code>aws/spans</code> 接收 X-Ray 转发的 span</td>
+      <td>上线周期</td>
+      <td class="ec2-col lose">❌ 数周开发 + 测试 + 部署</td>
+      <td class="ac-col win">✅ 一键 CloudFormation 部署，当天上线</td>
+    </tr>
+    <tr>
+      <td>中文/多语言</td>
+      <td class="ec2-col neu">⚠️ 需自行处理编码，易乱码</td>
+      <td class="ac-col win">✅ 多层编码管道，CJK 完整支持</td>
+    </tr>
+    <tr>
+      <td>起步成本</td>
+      <td class="ec2-col lose">❌ 固定 EC2 费用 + 开发人力</td>
+      <td class="ac-col win">✅ 按实际用量付费，无固定成本</td>
     </tr>
   </table>
-  <br>
-  <div class="box" style="font-size:0.65em">
-    🚀 一键部署：<code>./deploy/deploy.sh &lt;STACK_NAME&gt; &lt;REGION&gt; &lt;S3_BUCKET&gt;</code>
-    — CloudFormation 自动创建全部资源（约 10–15 分钟）
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 9: AgentCore 核心优势
+══════════════════════════════════════════════════════ -->
+<section>
+  <div class="chip">AgentCore 优势</div>
+  <h2>AWS AgentCore 的核心差异化优势</h2>
+  <div class="cols">
+    <div>
+      <div class="card card-teal">
+        <h4>🤖 AI 原生代码生成</h4>
+        基于 Claude Sonnet，根据自然语言指令动态生成爬虫脚本；网站改版时只需重新描述需求，无需修改代码
+      </div>
+      <div class="card card-teal">
+        <h4>🔒 隔离沙箱执行</h4>
+        Code Interpreter 在独立沙箱中运行生成的爬虫代码，安全隔离，不影响主应用；每次爬取后自动清理
+      </div>
+      <div class="card card-teal">
+        <h4>🌐 真实浏览器托管</h4>
+        AgentCore Browser 提供托管 Chromium + CDP WebSocket；支持 JS 渲染、截图、Canvas 指纹绕过，无需运维浏览器集群
+      </div>
+    </div>
+    <div>
+      <div class="card card-teal">
+        <h4>⚡ 按实际 CPU/内存计费</h4>
+        I/O 等待期间（占爬取时间 30–70%）<strong>不计费</strong>；相比 EC2 按小时付费可节省大量成本
+      </div>
+      <div class="card card-teal">
+        <h4>🔐 原生 IAM 集成</h4>
+        容器自动获得 Task Role 凭证；无需管理密钥，通过 IAM Policy 精细控制权限
+      </div>
+      <div class="card card-teal">
+        <h4>📊 全链路可观测性</h4>
+        Strands Agents 自动插桩；OTLP → X-Ray → CloudWatch，每个 Agent 调用步骤均可追踪，无需额外埋点
+      </div>
+    </div>
   </div>
 </section>
 
-<!-- ═══════════════════════════ SLIDE 5: SKILLS ═════════════════════════ -->
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 10: SECTION — 方案架构
+══════════════════════════════════════════════════════ -->
+<section class="section-slide">
+  <div class="num">04</div>
+  <h2>方案架构详解</h2>
+  <div class="desc">CrawlAgentcore 的技术实现与核心组件</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 11: 架构图
+══════════════════════════════════════════════════════ -->
 <section>
-  <div class="section-label">技能系统</div>
-  <h2>6 种爬虫技能 — 自动选择</h2>
+  <div class="chip">方案架构</div>
+  <h2>系统架构全景</h2>
+  <div class="cols">
+    <div style="flex: 1.1">
+      <div style="font-size:0.65em; color:#8fb3d4; margin-bottom:0.3em">请求链路</div>
+      <div class="arch arch-blue">
+        🖥️ <strong>客户端 — crawler_cli.py</strong><br>
+        <span style="color:#6a8aaa">自然语言输入 | --cloud / --dev / --browser / --skill</span>
+      </div>
+      <div class="arch-arrow">↓ HTTPS invoke_agent_runtime（SigV4 签名）</div>
+      <div class="arch">
+        ☁️ <strong>AgentCore Runtime Endpoint</strong><br>
+        <span style="color:#6a8aaa">Docker linux/arm64 · FastAPI/Uvicorn · 弹性托管</span>
+      </div>
+      <div class="arch-arrow">↓</div>
+      <div class="arch">
+        🤖 <strong>Strands Agent — Claude Sonnet via Bedrock</strong><br>
+        <span style="color:#6a8aaa">自动选择技能 → 生成完整爬虫 Python 脚本 → 执行</span>
+      </div>
+      <div class="arch-arrow">↓ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ↓</div>
+      <div class="cols" style="gap:0.4em">
+        <div class="arch" style="text-align:center">
+          ⚙️ <strong>Code Interpreter</strong><br>
+          <span style="color:#6a8aaa">沙箱执行 Python<br>requests + BeautifulSoup4</span>
+        </div>
+        <div class="arch arch-accent" style="text-align:center">
+          🌐 <strong>AgentCore Browser</strong><br>
+          <span style="color:#5a9a90">托管 Chromium<br>CDP WebSocket + 截图</span>
+        </div>
+      </div>
+    </div>
+    <div style="flex: 0.9">
+      <div style="font-size:0.65em; color:#8fb3d4; margin-bottom:0.3em">可观测性链路</div>
+      <div class="arch">
+        📡 <strong>StrandsTelemetry 自动插桩</strong><br>
+        <span style="color:#6a8aaa">invoke_agent · chat · execute_tool</span>
+      </div>
+      <div class="arch-arrow">↓ OTLPSpanExporter + _RefreshingAWS4Auth</div>
+      <div class="arch">
+        🔭 <strong>AWS X-Ray OTLP Endpoint</strong>
+      </div>
+      <div class="arch-arrow">↓ 转发</div>
+      <div class="arch">
+        📋 <strong>CloudWatch Logs — aws/spans</strong><br>
+        <span style="color:#6a8aaa">python observe.py --traces / --live</span>
+      </div>
+      <hr class="divider">
+      <div style="font-size:0.65em; color:#8fb3d4; margin-bottom:0.3em">部署链路</div>
+      <div class="arch">
+        🐳 <strong>docker buildx</strong> linux/arm64<br>
+        <span style="color:#6a8aaa">→ ECR → AgentCore Runtime 更新</span>
+      </div>
+      <div class="arch-arrow">↓ 或</div>
+      <div class="arch">
+        📦 <strong>CloudFormation 一键部署</strong><br>
+        <span style="color:#6a8aaa">deploy/deploy.sh 自动创建所有资源</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 12: 技能系统 + 反爬策略
+══════════════════════════════════════════════════════ -->
+<section>
+  <div class="chip">技术亮点</div>
+  <h2>6 种爬虫技能 × 三级反爬策略</h2>
   <div class="cols">
     <div>
       <table>
         <tr><th>技能</th><th>适用场景</th></tr>
         <tr><td><code>default-crawl</code></td><td>通用页面 — 标题、链接、文本</td></tr>
-        <tr><td><code>ecommerce-crawl</code></td><td>电商 — 价格、库存、分页</td></tr>
-        <tr><td><code>news-crawl</code></td><td>新闻 — 标题、作者、日期、正文</td></tr>
-        <tr><td><code>api-crawl</code></td><td>REST/JSON 接口 + 分页</td></tr>
+        <tr><td><code>ecommerce-crawl</code></td><td>电商 — 价格、库存、评价、分页</td></tr>
+        <tr><td><code>news-crawl</code></td><td>新闻 — 标题、作者、正文、发布时间</td></tr>
+        <tr><td><code>api-crawl</code></td><td>REST/JSON 接口 + 翻页</td></tr>
         <tr><td><code>docs-crawl</code></td><td>文档/Wiki — 标题层级、代码块</td></tr>
-        <tr><td><code>social-crawl</code></td><td>论坛/社媒 — 帖子、互动数据</td></tr>
+        <tr><td><code>social-crawl</code></td><td>论坛/社媒 — 帖子、时间戳、互动</td></tr>
       </table>
+      <div class="card card-blue" style="margin-top:0.5em; font-size:0.65em">
+        💡 <strong>自动选择：</strong>独立 Selector Agent 根据用户自然语言描述选出最匹配的技能，也支持 <code>--skill</code> 强制指定
+      </div>
     </div>
     <div>
-      <div class="box-blue box">
-        <strong>自动选择流程</strong><br>
-        用户自然语言 → 独立 Selector Agent（无工具）→ 返回 <code>{"skill": "..."}</code>
-      </div>
-      <br>
-      <div class="box">
-        <strong>技能结构</strong><br>
-        每个技能目录包含：<br>
-        · <code>SKILL.md</code> — YAML frontmatter + LLM 指令<br>
-        · <code>examples/sample-output.json</code> — 输出结构参考<br>
-        · <code>reference.md</code>（可选）— 复杂站点提示
-      </div>
-      <br>
-      <div class="box-green box">
-        ➕ <strong>自定义技能</strong>：创建 <code>skills/my-skill/SKILL.md</code><br>
-        添加 <code>name:</code> 和 <code>description:</code> frontmatter，运行时自动发现
+      <table>
+        <tr>
+          <th>等级</th>
+          <th>代表站点</th>
+          <th>并发 / 延迟</th>
+        </tr>
+        <tr>
+          <td class="strict">⛔ STRICT</td>
+          <td style="font-size:0.85em">douban, amazon<br>weibo, zhihu</td>
+          <td>2–3 线程<br>1.5–5.0 秒</td>
+        </tr>
+        <tr>
+          <td class="moderate">⚠️ MODERATE</td>
+          <td style="font-size:0.85em">普通 .com/.net<br>（默认兜底）</td>
+          <td>3–6 线程<br>0.1–2.5 秒</td>
+        </tr>
+        <tr>
+          <td class="open">✅ OPEN</td>
+          <td style="font-size:0.85em">toscrape.com<br>jsonplaceholder</td>
+          <td>5–10 线程<br>无延迟</td>
+        </tr>
+      </table>
+      <div class="card card-teal" style="margin-top:0.5em; font-size:0.65em">
+        🔄 ThreadPoolExecutor 并发抓取 + 自动 429/503 指数退避重试（最多 3 次）
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════════════════ SLIDE 6: ANTI-BOT ══════════════════════ -->
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 13: SECTION — 成本估算
+══════════════════════════════════════════════════════ -->
+<section class="section-slide">
+  <div class="num">05</div>
+  <h2>成本估算</h2>
+  <div class="desc">基于 AWS 官方定价的 TCO 对比分析</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 14: AgentCore 成本估算
+══════════════════════════════════════════════════════ -->
 <section>
-  <div class="section-label">反爬策略</div>
-  <h2>三级并发 & 反爬虫策略</h2>
-  <p style="font-size:0.7em; color:#aaa">每个技能在运行时自动对目标域名分级，无需手动配置</p>
+  <div class="chip">成本估算</div>
+  <h2>AgentCore 方案 — 月度成本估算</h2>
+  <p style="font-size:0.62em; color:#8fb3d4">假设场景：每天执行 <strong>100 次</strong>爬取任务，每次平均耗时 <strong>60 秒</strong>，月计 3,000 次</p>
+
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th colspan="3">AgentCore Runtime（计算费用）</th></tr>
+        <tr>
+          <td>规格</td>
+          <td>单价</td>
+          <td>月度用量</td>
+        </tr>
+        <tr>
+          <td>CPU（1 vCPU）</td>
+          <td>$0.0895 / vCPU-hr</td>
+          <td>3,000 次 × 60s ÷ 3600 = <strong>50 vCPU-hr</strong></td>
+        </tr>
+        <tr>
+          <td>内存（2 GB）</td>
+          <td>$0.00945 / GB-hr</td>
+          <td>50 hr × 2 GB = <strong>100 GB-hr</strong></td>
+        </tr>
+        <tr>
+          <td style="color:var(--success)">I/O 等待折扣</td>
+          <td style="color:var(--success)">节省约 50%</td>
+          <td style="color:var(--success)">CPU 实际计费 ≈ 25 vCPU-hr</td>
+        </tr>
+      </table>
+      <br>
+      <table>
+        <tr><th colspan="3">Bedrock — Claude Sonnet（LLM 推理）</th></tr>
+        <tr>
+          <td>Input tokens</td>
+          <td>$3.00 / 1M tokens</td>
+          <td>3,000 次 × 2,000 tokens = 6M → <strong>$18.00</strong></td>
+        </tr>
+        <tr>
+          <td>Output tokens</td>
+          <td>$15.00 / 1M tokens</td>
+          <td>3,000 次 × 1,500 tokens = 4.5M → <strong>$67.50</strong></td>
+        </tr>
+      </table>
+    </div>
+    <div>
+      <table>
+        <tr><th colspan="2">月度费用汇总（AgentCore 方案）</th></tr>
+        <tr><td>AgentCore Runtime CPU</td><td>$0.0895 × 25 = <strong>$2.24</strong></td></tr>
+        <tr><td>AgentCore Runtime 内存</td><td>$0.00945 × 100 = <strong>$0.95</strong></td></tr>
+        <tr><td>Code Interpreter 沙箱</td><td>≈ <strong>$3.00</strong>（同定价结构）</td></tr>
+        <tr><td>Claude Sonnet 推理</td><td><strong>$85.50</strong></td></tr>
+        <tr><td>ECR 存储（2 GB）</td><td><strong>$0.20</strong></td></tr>
+        <tr><td>CloudWatch / X-Ray</td><td><strong>$2.00</strong></td></tr>
+        <tr><td>数据传输（出站 10 GB）</td><td><strong>$0.90</strong></td></tr>
+      </table>
+      <div class="cost-total">
+        <div class="amount">≈ $95 / 月</div>
+        <div class="label">3,000 次爬取 · 含 LLM 推理 · 无固定基础设施成本</div>
+      </div>
+    </div>
+  </div>
+  <div class="footnote">* CPU/内存定价来源：AWS AgentCore 官方定价页面（2026年）；Claude Sonnet 参考 Bedrock on-demand 定价；实际费用因任务复杂度和 token 用量而异</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 15: EC2 成本对比
+══════════════════════════════════════════════════════ -->
+<section>
+  <div class="chip">成本对比</div>
+  <h2>EC2 自建方案 vs AgentCore — TCO 对比</h2>
+  <p style="font-size:0.62em; color:#8fb3d4">同等负载：每天 100 次爬取，含 JS 渲染支持</p>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th colspan="2">🖥️ EC2 自建方案（月度）</th></tr>
+        <tr><td>爬虫服务器（m5.large × 2，7×24）</td><td>$0.096 × 24 × 30 × 2 = <strong>$138.24</strong></td></tr>
+        <tr><td>Selenium/Playwright 服务器（m5.xlarge × 1）</td><td>$0.192 × 24 × 30 = <strong>$138.24</strong></td></tr>
+        <tr><td>调度器（t3.medium × 1）</td><td>$0.0416 × 24 × 30 = <strong>$29.95</strong></td></tr>
+        <tr><td>EBS 存储（100 GB）</td><td><strong>$10.00</strong></td></tr>
+        <tr><td>CloudWatch 日志</td><td><strong>$5.00</strong></td></tr>
+        <tr><td>数据传输</td><td><strong>$5.00</strong></td></tr>
+        <tr><td style="color:var(--danger)">开发 & 维护人力（0.3 FTE）</td><td style="color:var(--danger)"><strong>$3,000+</strong></td></tr>
+      </table>
+      <div class="cost-total" style="border-color:var(--danger); background:rgba(255,107,107,0.1)">
+        <div class="amount" style="color:var(--danger)">≈ $326 / 月</div>
+        <div class="label">纯基础设施（不含人力）</div>
+      </div>
+    </div>
+    <div>
+      <div class="card card-green" style="margin-bottom:0.6em">
+        <h4>💰 成本节省</h4>
+        <div class="stat-row">
+          <div class="stat">
+            <div class="n">70%</div>
+            <div class="l">基础设施费用节省<br>（$326 → $95）</div>
+          </div>
+          <div class="stat">
+            <div class="n">0</div>
+            <div class="l">运维人力<br>（完全托管）</div>
+          </div>
+        </div>
+      </div>
+      <div class="card card-teal">
+        <h4>🔑 AgentCore 隐性节省</h4>
+        <ul style="margin:0; padding-left:1.2em">
+          <li>I/O 等待期间不计费（节省约 30–50%）</li>
+          <li>无需购买 Selenium 服务器（节省 $138/月）</li>
+          <li>无需爬虫工程师维护（节省 $3,000+/月人力）</li>
+          <li>网站改版无需重写代码（节省反复开发成本）</li>
+          <li>CloudFormation 一键部署，0 天上线</li>
+        </ul>
+      </div>
+      <div class="footnote" style="margin-top:0.4em">* EC2 价格参考 us-east-1 按需 Linux 实例；人力成本按初级工程师估算；实际节省因团队规模而异</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 16: 弹性成本场景
+══════════════════════════════════════════════════════ -->
+<section>
+  <div class="chip">成本弹性</div>
+  <h2>按需付费 — 不同业务规模的成本表现</h2>
+  <p style="font-size:0.62em; color:#8fb3d4">AgentCore 按实际用量计费，EC2 固定成本与负载无关</p>
   <table>
     <tr>
-      <th>等级</th>
-      <th>典型站点</th>
-      <th><code>default</code></th>
-      <th><code>ecommerce</code></th>
-      <th><code>news</code></th>
-      <th><code>api</code></th>
-      <th><code>docs</code></th>
-      <th><code>social</code></th>
+      <th>业务规模</th>
+      <th>每月爬取次数</th>
+      <th>AgentCore 月费用</th>
+      <th>EC2 方案月费用</th>
+      <th>AgentCore 节省</th>
     </tr>
     <tr>
-      <td class="strict">⛔ STRICT</td>
-      <td style="font-size:0.85em">douban, amazon, weibo, zhihu</td>
-      <td>1 / 1.5–3s</td>
-      <td>3 / 1.5–3s</td>
-      <td>2 / 2–4s</td>
-      <td>2 / 1–2s</td>
-      <td>2 / 1.5–3s</td>
-      <td>2 / 2.5–5s</td>
+      <td>小型（POC / 测试）</td>
+      <td>300 次</td>
+      <td class="win">≈ $12</td>
+      <td class="lose">≈ $326（固定）</td>
+      <td class="win">$314（96%↓）</td>
     </tr>
     <tr>
-      <td class="moderate">⚠️ MODERATE</td>
-      <td style="font-size:0.85em">普通 .com/.net 站点</td>
-      <td>1 / 0.5–1.5s</td>
-      <td>5 / 0.3–1s</td>
-      <td>4 / 0.5–1.5s</td>
-      <td>6 / 0.1–0.5s</td>
-      <td>5 / 0.2–0.8s</td>
-      <td>3 / 1–2.5s</td>
+      <td>中型（典型业务）</td>
+      <td>3,000 次</td>
+      <td class="win">≈ $95</td>
+      <td class="lose">≈ $326</td>
+      <td class="win">$231（71%↓）</td>
     </tr>
     <tr>
-      <td class="open">✅ OPEN</td>
-      <td style="font-size:0.85em">toscrape, jsonplaceholder, docs.python.org</td>
-      <td>1 / none</td>
-      <td>8 / none</td>
-      <td>6 / none</td>
-      <td>10 / none</td>
-      <td>8 / none</td>
-      <td>5 / 0.3–1s</td>
+      <td>大型（高频采集）</td>
+      <td>30,000 次</td>
+      <td class="neu">≈ $920</td>
+      <td class="lose">≈ $980（3×规模）</td>
+      <td class="win">$60（6%↓）+ 零运维</td>
+    </tr>
+    <tr>
+      <td>批量突发（大促期间）</td>
+      <td>10,000 次（1天）</td>
+      <td class="win">按量峰值计费</td>
+      <td class="lose">需提前扩容或限速</td>
+      <td class="win">弹性无上限，无预付</td>
     </tr>
   </table>
   <br>
-  <div class="cols" style="gap:1em">
-    <div class="box" style="font-size:0.65em">
-      🔄 <strong>ThreadPoolExecutor</strong> 并发多页面抓取（as_completed 模式）
+  <div class="cols">
+    <div class="card card-green" style="font-size:0.65em">
+      📈 <strong>低负载时 AgentCore 优势最大</strong><br>
+      POC 阶段只需 $12/月，EC2 最低也要 $326/月固定投入
     </div>
-    <div class="box" style="font-size:0.65em">
-      🔁 <strong>429/503 自动退避重试</strong>，最多 3 次，指数退避
+    <div class="card card-orange" style="font-size:0.65em">
+      💡 <strong>高负载时仍有价值</strong><br>
+      AgentCore 零运维 + 弹性扩展，避免扩容延迟和资源浪费
     </div>
-    <div class="box" style="font-size:0.65em">
-      🕵️ <strong>UA 轮换</strong>：4 个真实浏览器 User-Agent 随机选取
+    <div class="card card-teal" style="font-size:0.65em">
+      🔮 <strong>成本持续优化</strong><br>
+      提示词缓存（Prompt Caching）可将重复请求成本降低 80%
     </div>
   </div>
 </section>
 
-<!-- ═══════════════════════════ SLIDE 7: BROWSER TOOL ══════════════════ -->
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 17: SECTION — 总结
+══════════════════════════════════════════════════════ -->
+<section class="section-slide">
+  <div class="num">06</div>
+  <h2>总结与下一步</h2>
+  <div class="desc">价值主张 · 快速启动路径</div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 18: 价值主张
+══════════════════════════════════════════════════════ -->
 <section>
-  <div class="section-label">Browser 工具</div>
-  <h2>AgentCore Browser — 托管 Chromium</h2>
+  <div class="chip">总结</div>
+  <h2>为什么选择 AWS AgentCore 智能爬虫方案？</h2>
   <div class="cols">
     <div>
-      <table>
-        <tr><th>场景</th><th>Code Interpreter</th><th>Browser</th></tr>
-        <tr><td>静态 HTML</td><td>✅ 快速</td><td>不必要</td></tr>
-        <tr><td>SPA / React / Vue</td><td>❌ 空内容</td><td>✅</td></tr>
-        <tr><td>403 / CAPTCHA</td><td>❌</td><td>✅</td></tr>
-        <tr><td>Canvas/WebGL 指纹</td><td>❌</td><td>✅ 真实指纹</td></tr>
-        <tr><td>需要截图</td><td>❌</td><td>✅ screenshot_b64</td></tr>
-        <tr><td>批量 100+ 页面</td><td>✅ 并发快</td><td>较慢</td></tr>
-      </table>
-      <br>
-      <div class="box-blue box" style="font-size:0.65em">
-        启用：<code>python crawler_cli.py --cloud --browser "..."</code>
+      <div class="card card-teal">
+        <h4>🤖 AI 原生，描述即爬取</h4>
+        自然语言 → LLM 自动生成代码 → 沙箱执行<br>非工程师也能驱动复杂爬取任务
+      </div>
+      <div class="card card-teal">
+        <h4>☁️ 完全托管，零运维</h4>
+        Runtime / Browser / Code Interpreter 全部托管<br>无需维护任何爬虫基础设施
+      </div>
+      <div class="card card-teal">
+        <h4>💰 按量付费，成本最优</h4>
+        小规模节省 90%+，无固定投入<br>I/O 等待不计费，弹性无上限
       </div>
     </div>
     <div>
-      <div style="font-size:0.6em; font-family:monospace; background:#0d1117; padding:1em; border-radius:6px; line-height:1.7">
-        <span style="color:#6BCB77">StartBrowserSession</span><br>
-        &nbsp;&nbsp;↓ viewPort 1280×900, timeout 300s<br>
-        <span style="color:#6BCB77">UpdateBrowserStream</span> → WebSocket<br>
-        &nbsp;&nbsp;↓ automationStream (CDP)<br>
-        <span style="color:#6BCB77">InvokeBrowser</span> Ctrl+L → keyType url → Return<br>
-        &nbsp;&nbsp;↓ time.sleep(wait_seconds) — JS 渲染<br>
-        <span style="color:var(--accent)">CDP Runtime.evaluate</span><br>
-        &nbsp;&nbsp;· document.title<br>
-        &nbsp;&nbsp;· document.body.innerText<br>
-        &nbsp;&nbsp;· querySelectorAll('a[href]')<br>
-        <span style="color:#6BCB77">InvokeBrowser</span> screenshot → base64 PNG<br>
-        &nbsp;&nbsp;↓<br>
-        <span style="color:#FFD93D">StopBrowserSession</span> (finally)
+      <div class="card card-teal">
+        <h4>🛡️ 企业级安全</h4>
+        IAM 原生集成，代码沙箱隔离<br>SigV4 全链路签名，无需管理密钥
+      </div>
+      <div class="card card-teal">
+        <h4>🌐 全场景覆盖</h4>
+        静态 HTML + JS SPA + 反爬站点<br>Code Interpreter + Browser 双引擎
+      </div>
+      <div class="card card-teal">
+        <h4>📊 生产级可观测</h4>
+        OTLP → X-Ray → CloudWatch 全链路<br>每个 Agent 步骤耗时可追踪
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════════════════ SLIDE 8: ENCODING ══════════════════════ -->
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 19: 下一步行动
+══════════════════════════════════════════════════════ -->
 <section>
-  <div class="section-label">编码管道</div>
-  <h2>CJK 编码管道 — 零数据损失</h2>
-  <p style="font-size:0.7em; color:#aaa">AgentCore 传输层会损坏 0x80–0x9F 非 ASCII 字节，以下管道保证中文完整传输</p>
-  <div style="font-size:0.62em; font-family:monospace; background:#0d1117; padding:1.2em; border-radius:6px; line-height:1.9">
-    <span style="color:#aaa">// Code Interpreter 标准输出</span><br>
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
-    <span style="color:#FFD93D">_safe_output(result)</span>&nbsp;&nbsp;&nbsp;<span style="color:#aaa">// SKILL.md 强制要求 LLM 调用</span><br>
-    &nbsp;&nbsp;&nbsp;&nbsp;json.dumps → base64.b64encode → <span style="color:#6BCB77">print <<<CRAWLER_B64>>></span><br>
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
-    <span style="color:var(--accent)">_extract_crawler_output(agent)</span><br>
-    &nbsp;&nbsp;&nbsp;&nbsp;① ast.literal_eval 解包 CI 的 [{'type':'text','text':'...'}] 格式<br>
-    &nbsp;&nbsp;&nbsp;&nbsp;② regex 匹配 <<<CRAWLER_B64>>> → base64.b64decode → json.loads<br>
-    &nbsp;&nbsp;&nbsp;&nbsp;③ 降级：<<<CRAWLER_JSON>>> + Mojibake 修复<br>
-    &nbsp;&nbsp;&nbsp;&nbsp;④ 降级：裸 JSON 启发式解析<br>
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
-    <span style="color:#FFD93D">_ensure_ascii_safe()</span>&nbsp;&nbsp;<span style="color:#aaa">// 转义所有非 ASCII → \uXXXX</span><br>
-    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓ AgentCore 传输<br>
-    <span style="color:#6BCB77">_unescape_unicode_recursive()</span>&nbsp;<span style="color:#aaa">// CLI 端还原 \uXXXX → 真实 Unicode</span>
-  </div>
-  <div class="box" style="margin-top:0.5em; font-size:0.65em">
-    <strong>Mojibake 修复：</strong> <code>_repair_mojibake()</code> 检测 UTF-8 被误以 Latin-1 解码（最多 3 次往返修复）；<code>_looks_like_mojibake()</code> 触发自动重试爬取
-  </div>
-</section>
-
-<!-- ═══════════════════════════ SLIDE 9: OBSERVABILITY ═════════════════ -->
-<section>
-  <div class="section-label">可观测性</div>
-  <h2>OpenTelemetry → X-Ray → CloudWatch</h2>
+  <div class="chip">下一步</div>
+  <h2>快速启动路径</h2>
   <div class="cols">
     <div>
-      <div class="arch-box">
-        <strong>Strands Agent 自动插桩</strong><br>
-        <span style="color:#888">invoke_agent · execute_event_loop_cycle<br>chat · execute_tool code_interpreter</span>
+      <div class="card card-orange">
+        <h4>🚀 第一步：POC（1–2 天）</h4>
+        <ul style="margin:0.3em 0 0; padding-left:1.3em">
+          <li>一键 CloudFormation 部署所有 AWS 资源</li>
+          <li>运行 <code>crawler_cli.py --cloud</code> 验证爬取效果</li>
+          <li>预计成本：<strong>$12/月</strong>（300 次）</li>
+        </ul>
       </div>
-      <div class="arch-arrow">⬇ BatchSpanProcessor</div>
-      <div class="arch-box">
-        <strong>OTLPSpanExporter</strong><br>
-        <span style="color:#888">requests.Session + _RefreshingAWS4Auth<br>每次请求重新获取 boto3 凭证（短期 Token 防过期）</span>
+      <div class="card card-orange">
+        <h4>📦 第二步：集成（1 周）</h4>
+        <ul style="margin:0.3em 0 0; padding-left:1.3em">
+          <li>对接客户现有数据管道（S3 / RDS / Kafka）</li>
+          <li>定制爬虫技能（添加 skills/ 目录）</li>
+          <li>配置 CloudWatch 告警和 Dashboard</li>
+        </ul>
       </div>
-      <div class="arch-arrow">⬇ HTTPS SigV4</div>
-      <div class="arch-box">
-        <strong>AWS X-Ray OTLP</strong><br>
-        <span style="color:#888">https://xray.$REGION.amazonaws.com/v1/traces</span>
-      </div>
-      <div class="arch-arrow">⬇ 转发</div>
-      <div class="arch-box">
-        <strong>CloudWatch Logs</strong> aws/spans<br>
-        <span style="color:#888">python observe.py --traces / --live</span>
+      <div class="card card-orange">
+        <h4>🏭 第三步：生产上线（2 周）</h4>
+        <ul style="margin:0.3em 0 0; padding-left:1.3em">
+          <li>配置 EventBridge 定时触发</li>
+          <li>设置 Auto Scaling 和成本告警</li>
+          <li>建立爬取质量监控体系</li>
+        </ul>
       </div>
     </div>
     <div>
-      <div class="box-green box" style="font-size:0.6em">
-        <strong>实际爬取豆瓣 TOP250 Trace 示例</strong><br><br>
-        <code style="font-size:0.95em">
-          invoke_agent&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;70.40s<br>
-          ├ execute_event_loop_cycle&nbsp;&nbsp;43.57s<br>
-          │ ├ chat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;16.27s<br>
-          ├ execute_tool code_interpreter 27.30s<br>
-          └ execute_event_loop_cycle&nbsp;&nbsp;26.83s
-        </code>
+      <div class="card card-blue" style="margin-bottom:0.6em">
+        <h4>🧰 现有产出物（可直接使用）</h4>
+        <ul style="margin:0.3em 0 0; padding-left:1.3em">
+          <li>完整 CloudFormation 模板（一键部署）</li>
+          <li>6 种预置爬虫技能（开箱即用）</li>
+          <li>AgentCore Browser 工具（JS 渲染）</li>
+          <li>可观测性查看脚本（observe.py）</li>
+          <li>253 个单元测试（覆盖编码管道）</li>
+        </ul>
       </div>
-      <br>
-      <div class="box" style="font-size:0.65em">
-        <strong>关键问题解决：</strong><br>
-        容器内短期 IAM Task Role Token 会在运行期间过期，导致 OTLP 400 错误。<br>
-        <code>_RefreshingAWS4Auth</code> 实现 <code>__call__</code> 接口，每次 HTTP 请求时调用 <code>get_frozen_credentials()</code> 重新获取凭证。
+      <div class="card card-green">
+        <h4>📋 GitHub 仓库</h4>
+        <a href="https://github.com/jiaMery/CrawlAgentcore" style="font-size:0.9em">
+          github.com/jiaMery/CrawlAgentcore
+        </a><br>
+        <span style="font-size:0.85em; color:#5a8a6a">MIT License · 完整双语文档</span>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ═══════════════════════════ SLIDE 10: QUICK START ══════════════════ -->
-<section>
-  <div class="section-label">快速开始</div>
-  <h2>本地开发 & 云端调用</h2>
-  <div class="cols">
-    <div>
-      <p style="color:var(--aws-orange); font-size:0.75em; margin-bottom:0.3em">本地开发模式</p>
-      <pre><code class="bash"># 1. 创建虚拟环境（需要 /usr/bin/python3.10）
-/usr/bin/python3.10 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# 2. 启动开发服务器
-AWS_REGION=us-east-1 \
-  .venv/bin/uvicorn src.main:app \
-  --host 0.0.0.0 --port 8080
-
-# 3. 本地爬取
-python crawler_cli.py --dev \
-  "爬取 https://books.toscrape.com 所有书价"</code></pre>
-    </div>
-    <div>
-      <p style="color:var(--aws-orange); font-size:0.75em; margin-bottom:0.3em">云端调用示例</p>
-      <pre><code class="bash"># Code Interpreter 模式（默认）
-python crawler_cli.py --cloud \
-  "爬取豆瓣电影TOP250的名称、评分、导演"
-
-# Browser 模式（JS 渲染 / 反爬）
-python crawler_cli.py --cloud --browser \
-  "抓取某动态加载商品页面"
-
-# 指定技能 + 保存结果
-python crawler_cli.py --cloud \
-  --skill news-crawl \
-  --output result.json \
-  "https://news.ycombinator.com"
-
-# 一键部署所有 AWS 资源
-./deploy/deploy.sh crawl-agentcore \
-  us-east-1 my-s3-bucket</code></pre>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════ SLIDE 11: TESTS ═════════════════════════ -->
-<section>
-  <div class="section-label">测试</div>
-  <h2>测试覆盖 — 253 个单元测试全部通过</h2>
-  <div class="cols">
-    <div>
-      <table>
-        <tr><th>测试模块</th><th>通过</th><th>覆盖点</th></tr>
-        <tr><td>test_agent_wiring</td><td class="open">✅</td><td>编码管道、输出提取</td></tr>
-        <tr><td>test_customer_inputs</td><td class="open">✅</td><td>技能路由、边界情况</td></tr>
-        <tr><td>test_skills</td><td class="open">✅</td><td>frontmatter 解析</td></tr>
-        <tr><td>test_browser_tool</td><td class="open">✅ 31</td><td>Session / CDP / 截图</td></tr>
-        <tr><td>test_cfn_handler</td><td class="open">✅ 45</td><td>资源类型、dispatch</td></tr>
-        <tr><td>test_encoding_advanced</td><td class="open">✅</td><td>深度编码管道</td></tr>
-        <tr><td>test_invoke_flow</td><td class="open">✅ 36</td><td>invoke + 重试 + 认证</td></tr>
-        <tr><td>test_cloud_e2e</td><td style="color:#888">⏭ 23</td><td>设置环境变量后激活</td></tr>
-      </table>
-    </div>
-    <div>
-      <div class="cols" style="flex-wrap:wrap; gap:0.5em">
-        <div class="stat">
-          <div class="num">253</div>
-          <div class="label">单元测试通过</div>
-        </div>
-        <div class="stat">
-          <div class="num">~14s</div>
-          <div class="label">总运行时间</div>
-        </div>
-        <div class="stat">
-          <div class="num">70.4s</div>
-          <div class="label">TOP250 端到端</div>
-        </div>
-        <div class="stat">
-          <div class="num">&lt;20ms</div>
-          <div class="label">本地计算开销</div>
-        </div>
-      </div>
-      <div class="box" style="font-size:0.65em; margin-top:0.5em">
-        <strong>性能：</strong><br>
-        Tier 分级：0.0015 ms | 技能加载：0.2 ms<br>
-        Base64 往返（250条）：8.11 ms<br>
-        实际延迟由 LLM 推理（10–60s）和网络 I/O 决定
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════ SLIDE 12: PROJECT STRUCTURE ════════════ -->
-<section>
-  <div class="section-label">项目结构</div>
-  <h2>代码组织</h2>
-  <div class="cols">
-    <div style="font-size:0.62em; font-family:monospace; background:#0d1117; padding:1em; border-radius:6px; line-height:1.8">
-      <span style="color:var(--aws-orange)">CrawlAgentcore/</span><br>
-      ├── <span style="color:var(--accent)">src/</span><br>
-      │&nbsp;&nbsp; ├── <span style="color:#6BCB77">main.py</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># Agent 入口 + 编码管道</span><br>
-      │&nbsp;&nbsp; ├── <span style="color:#6BCB77">browser_tool.py</span>&nbsp;&nbsp;&nbsp;<span style="color:#666"># Chromium @tool</span><br>
-      │&nbsp;&nbsp; └── <span style="color:#6BCB77">skills.py</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># 技能加载器</span><br>
-      ├── <span style="color:var(--accent)">skills/</span><br>
-      │&nbsp;&nbsp; ├── default-crawl/<br>
-      │&nbsp;&nbsp; ├── ecommerce-crawl/<br>
-      │&nbsp;&nbsp; ├── news-crawl/<br>
-      │&nbsp;&nbsp; ├── api-crawl/<br>
-      │&nbsp;&nbsp; ├── docs-crawl/<br>
-      │&nbsp;&nbsp; └── social-crawl/<br>
-      ├── <span style="color:var(--accent)">deploy/</span><br>
-      │&nbsp;&nbsp; ├── cloudformation.yaml<br>
-      │&nbsp;&nbsp; ├── deploy.sh<br>
-      │&nbsp;&nbsp; ├── package.sh<br>
-      │&nbsp;&nbsp; └── cfn_handler.py<br>
-      ├── <span style="color:var(--accent)">tests/</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># 9 个测试文件</span><br>
-      ├── <span style="color:var(--accent)">doc/</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># 架构图、测试报告</span><br>
-      ├── <span style="color:#6BCB77">crawler_cli.py</span>&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># 交互式 CLI 客户端</span><br>
-      ├── <span style="color:#6BCB77">observe.py</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># Trace 查看工具</span><br>
-      ├── Dockerfile&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># python:3.12-slim arm64</span><br>
-      └── .bedrock_agentcore.yaml
-    </div>
-    <div>
-      <div class="box" style="font-size:0.68em">
-        <strong>核心文件：src/main.py</strong><br>
-        · <code>invoke()</code> — 请求入口<br>
-        · <code>_auto_select_skill()</code> — LLM 技能选择<br>
-        · <code>_extract_crawler_output()</code> — 多层输出解析<br>
-        · <code>_ensure_ascii_safe()</code> — 传输编码保护<br>
-        · <code>_RefreshingAWS4Auth</code> — Token 自动刷新<br>
-        · <code>_setup_observability()</code> — OTLP 初始化
-      </div>
-      <br>
-      <div class="box-blue box" style="font-size:0.68em">
-        <strong>LLM 模型</strong><br>
-        <code>us.anthropic.claude-sonnet-4-6</code><br>
-        通过 Bedrock 跨区域推理配置文件调用<br>
-        （Strands Agents 默认值，可通过环境变量覆盖）
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════ SLIDE 13: DEMO ══════════════════════════ -->
-<section>
-  <div class="section-label">演示</div>
-  <h2>豆瓣 TOP250 云端爬取演示</h2>
-  <pre><code class="bash">$ python crawler_cli.py --cloud "爬取豆瓣电影TOP250的电影名称、评分、导演"
-
-[智能体] 自动选择技能: ecommerce-crawl
-[智能体] 生成爬虫代码并在 Code Interpreter 中执行...
-
-爬取完成 ✓  耗时: 70.4s  |  共获取: 250 条记录
-
-[1] 肖申克的救赎 (1994)  ★9.7  导演: 弗兰克·德拉邦特
-[2] 霸王别姬 (1993)      ★9.6  导演: 陈凯歌
-[3] 阿甘正传 (1994)      ★9.5  导演: 罗伯特·泽米吉斯
-...
-[250] 让子弹飞 (2010)    ★8.7  导演: 姜文
-
-结果已保存至: output/crawl_20260520_104930.json</code></pre>
-  <div class="cols" style="margin-top:0.8em">
-    <div class="box" style="font-size:0.65em">
-      📊 X-Ray Trace 总耗时：<strong>70.40s</strong><br>
-      其中 Code Interpreter 执行：<strong>27.30s</strong><br>
-      LLM 推理：<strong>~16s</strong>
-    </div>
-    <div class="box-green box" style="font-size:0.65em">
-      ✅ 250 条中文数据完整输出<br>
-      ✅ JSON 文件无乱码<br>
-      ✅ Span 写入 CloudWatch aws/spans
-    </div>
-    <div class="box-blue box" style="font-size:0.65em">
-      🔍 查看追踪数据：<br>
-      <code>python observe.py --traces</code><br>
-      <code>python observe.py --live</code>
-    </div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════ SLIDE 14: SUMMARY ══════════════════════ -->
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 20: THANK YOU
+══════════════════════════════════════════════════════ -->
 <section class="title-slide">
-  <h2>总结</h2>
+  <div style="font-size:2.5em; margin-bottom:0.2em">🙏</div>
+  <h1 style="font-size:1.6em">感谢聆听</h1>
+  <div class="sub">Questions & Discussion</div>
   <br>
-  <div class="cols" style="text-align:left">
-    <div>
-      <div class="box-green box" style="font-size:0.72em">
-        🤖 <strong>自然语言驱动</strong><br>
-        描述目标 → 自动选择技能 → 生成代码 → 执行
-      </div>
-      <div class="box-green box" style="font-size:0.72em">
-        ☁️ <strong>完全托管</strong><br>
-        AgentCore Runtime + Code Interpreter + Browser
-      </div>
-      <div class="box-green box" style="font-size:0.72em">
-        🌐 <strong>双执行引擎</strong><br>
-        静态页面用 requests，JS 页面用真实 Chromium
-      </div>
+  <div class="cols" style="text-align:center; justify-content:center; gap:1.5em; max-width:700px; margin:0 auto">
+    <div class="stat" style="padding:0.8em 1.5em">
+      <div class="n">$95</div>
+      <div class="l">月度成本<br>（3,000 次爬取）</div>
     </div>
-    <div>
-      <div class="box-green box" style="font-size:0.72em">
-        🛡️ <strong>智能反爬</strong><br>
-        三级 Tier 自动分级，ThreadPoolExecutor 并发
-      </div>
-      <div class="box-green box" style="font-size:0.72em">
-        🀄 <strong>完整 CJK 支持</strong><br>
-        多层编码管道，Mojibake 自动检测修复
-      </div>
-      <div class="box-green box" style="font-size:0.72em">
-        📊 <strong>生产级可观测性</strong><br>
-        OTLP → X-Ray → CloudWatch，全链路追踪
-      </div>
+    <div class="stat" style="padding:0.8em 1.5em">
+      <div class="n">0</div>
+      <div class="l">运维工作量<br>（完全托管）</div>
+    </div>
+    <div class="stat" style="padding:0.8em 1.5em">
+      <div class="n">1天</div>
+      <div class="l">POC 上线<br>（一键部署）</div>
+    </div>
+    <div class="stat" style="padding:0.8em 1.5em">
+      <div class="n">70%</div>
+      <div class="l">相比 EC2<br>成本节省</div>
     </div>
   </div>
   <br>
-  <div style="color:#888; font-size:0.6em">
-    GitHub: <a href="https://github.com/jiaMery/CrawlAgentcore" style="color:var(--aws-orange)">github.com/jiaMery/CrawlAgentcore</a>
+  <div style="font-size:0.52em; color:#4a6a8a">
+    AWS Solutions Architect &nbsp;|&nbsp; Amazon Bedrock AgentCore &nbsp;|&nbsp; 2026
   </div>
 </section>
 
@@ -757,9 +948,6 @@ python crawler_cli.py --cloud \
     height: 700,
     margin: 0.04,
     plugins: [ RevealHighlight, RevealNotes ],
-    highlight: {
-      highlightOnLoad: true,
-    }
   });
 </script>
 </body>
