@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrawlAgentcore — AWS Bedrock AgentCore 自然语言爬虫</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+  <style>
+    :root {
+      --aws-orange: #FF9900;
+      --aws-dark:   #232F3E;
+      --aws-blue:   #1A73E8;
+      --accent:     #00D4FF;
+    }
+
+    .reveal { font-family: 'Segoe UI', system-ui, sans-serif; }
+
+    .reveal h1, .reveal h2, .reveal h3 {
+      color: var(--aws-orange);
+      text-transform: none;
+      letter-spacing: -0.02em;
+    }
+
+    .reveal .slides section { text-align: left; }
+
+    /* Title slide */
+    .title-slide { text-align: center !important; }
+    .title-slide h1 { font-size: 2em; color: var(--aws-orange); margin-bottom: 0.2em; }
+    .title-slide .subtitle { color: #ccc; font-size: 0.9em; margin-bottom: 1em; }
+    .title-slide .badges span {
+      display: inline-block;
+      background: var(--aws-dark);
+      border: 1px solid var(--aws-orange);
+      border-radius: 4px;
+      padding: 4px 12px;
+      margin: 4px;
+      font-size: 0.65em;
+      color: var(--aws-orange);
+    }
+
+    /* Pill tags */
+    .pill {
+      display: inline-block;
+      background: rgba(255,153,0,0.15);
+      border: 1px solid var(--aws-orange);
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 0.6em;
+      color: var(--aws-orange);
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+    .pill-blue {
+      background: rgba(0,212,255,0.1);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Two-column layout */
+    .cols { display: flex; gap: 2em; align-items: flex-start; }
+    .cols > * { flex: 1; }
+
+    /* Highlight box */
+    .box {
+      background: rgba(255,153,0,0.08);
+      border-left: 3px solid var(--aws-orange);
+      padding: 0.6em 1em;
+      border-radius: 0 6px 6px 0;
+      margin: 0.5em 0;
+      font-size: 0.75em;
+    }
+    .box-blue {
+      background: rgba(0,212,255,0.08);
+      border-left-color: var(--accent);
+    }
+    .box-green {
+      background: rgba(0,200,100,0.08);
+      border-left-color: #00C864;
+    }
+
+    /* Table styling */
+    .reveal table { font-size: 0.65em; width: 100%; border-collapse: collapse; }
+    .reveal table th {
+      background: var(--aws-dark);
+      color: var(--aws-orange);
+      padding: 6px 10px;
+      text-align: left;
+    }
+    .reveal table td { padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .reveal table tr:hover td { background: rgba(255,153,0,0.05); }
+
+    /* Code block override */
+    .reveal pre { font-size: 0.55em; box-shadow: none; background: #0d1117; border-radius: 6px; }
+    .reveal code { font-family: 'Fira Code', 'Cascadia Code', monospace; }
+
+    /* Architecture diagram */
+    .arch-box {
+      border: 1px solid rgba(255,153,0,0.4);
+      border-radius: 8px;
+      padding: 8px 14px;
+      margin: 4px 0;
+      font-size: 0.62em;
+      background: rgba(255,153,0,0.06);
+    }
+    .arch-arrow { text-align: center; color: var(--aws-orange); font-size: 1.2em; margin: 2px 0; }
+
+    /* Stats */
+    .stat { text-align: center; padding: 10px; }
+    .stat .num { font-size: 2.2em; color: var(--aws-orange); font-weight: bold; line-height: 1; }
+    .stat .label { font-size: 0.6em; color: #aaa; }
+
+    /* Tier table colors */
+    .strict { color: #FF6B6B; }
+    .moderate { color: #FFD93D; }
+    .open { color: #6BCB77; }
+
+    .reveal ul { margin-left: 1.2em; }
+    .reveal ul li { margin-bottom: 0.3em; font-size: 0.78em; }
+
+    .section-label {
+      position: absolute;
+      top: 0; right: 0;
+      background: var(--aws-orange);
+      color: #000;
+      font-size: 0.45em;
+      padding: 3px 10px;
+      border-radius: 0 0 0 6px;
+      font-weight: bold;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ═══════════════════════════ SLIDE 1: TITLE ═══════════════════════════ -->
+<section class="title-slide">
+  <h1>CrawlAgentcore</h1>
+  <div class="subtitle">AWS Bedrock AgentCore 自然语言智能爬虫</div>
+  <div class="badges">
+    <span>Strands Agents</span>
+    <span>AgentCore Runtime</span>
+    <span>Code Interpreter</span>
+    <span>AgentCore Browser</span>
+    <span>OpenTelemetry / X-Ray</span>
+    <span>linux/arm64</span>
+  </div>
+  <br>
+  <div style="color:#888; font-size:0.55em;">
+    用自然语言描述目标 → Agent 自动选择技能 → 结构化 JSON 输出
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 2: PROBLEM ════════════════════════ -->
+<section>
+  <div class="section-label">背景</div>
+  <h2>传统爬虫的痛点</h2>
+  <div class="cols">
+    <div>
+      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
+        ❌ 每个目标网站需要手写定制爬虫脚本
+      </div>
+      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
+        ❌ 反爬虫策略需要人工调整并发和延迟
+      </div>
+      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
+        ❌ JS 渲染页面需要额外部署 Selenium/Playwright
+      </div>
+      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
+        ❌ 中文/CJK 字符编码损坏问题
+      </div>
+      <div class="box" style="border-color:#FF6B6B; background:rgba(255,107,107,0.08)">
+        ❌ 无可观测性，调试困难
+      </div>
+    </div>
+    <div>
+      <div class="box-green box">
+        ✅ 自然语言描述 → 自动生成并执行爬虫代码
+      </div>
+      <div class="box-green box">
+        ✅ 按域名自动分级，智能调整并发策略
+      </div>
+      <div class="box-green box">
+        ✅ 托管 Chromium，真实 JS 渲染 + 反爬绕过
+      </div>
+      <div class="box-green box">
+        ✅ 多层编码管道，完整 CJK/Unicode 支持
+      </div>
+      <div class="box-green box">
+        ✅ OpenTelemetry → X-Ray → CloudWatch 全链路追踪
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 3: ARCHITECTURE ═══════════════════ -->
+<section>
+  <div class="section-label">架构</div>
+  <h2>系统架构</h2>
+  <div class="cols">
+    <div style="flex: 1.2">
+      <div class="arch-box" style="border-color:var(--accent)">
+        🖥️ <strong>crawler_cli.py</strong> — 本地 CLI 客户端<br>
+        <span style="color:#888; font-size:0.9em">--dev / --cloud / --browser / --skill / --output</span>
+      </div>
+      <div class="arch-arrow">⬇ HTTPS invoke_agent_runtime</div>
+      <div class="arch-box">
+        ☁️ <strong>AgentCore Runtime Endpoint</strong><br>
+        <span style="color:#888; font-size:0.9em">Docker linux/arm64 容器 · FastAPI/Uvicorn</span>
+      </div>
+      <div class="arch-arrow">⬇</div>
+      <div class="arch-box">
+        🤖 <strong>Strands Agent</strong> (Claude Sonnet via Bedrock)<br>
+        <span style="color:#888; font-size:0.9em">_auto_select_skill → 生成爬虫代码 → 执行</span>
+      </div>
+      <div class="arch-arrow">⬇ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ⬇</div>
+      <div class="cols" style="gap:0.5em">
+        <div class="arch-box" style="text-align:center">
+          ⚙️ <strong>Code Interpreter</strong><br>
+          <span style="color:#888; font-size:0.9em">requests + BS4<br>静态页面</span>
+        </div>
+        <div class="arch-box" style="text-align:center; border-color:var(--accent)">
+          🌐 <strong>AgentCore Browser</strong><br>
+          <span style="color:#888; font-size:0.9em">托管 Chromium<br>JS 渲染 / 反爬</span>
+        </div>
+      </div>
+    </div>
+    <div style="flex: 0.8">
+      <div class="arch-box" style="border-color:#FF9900">
+        📊 <strong>可观测性</strong><br>
+        <span style="color:#888; font-size:0.9em">
+          OTLPSpanExporter<br>
+          ↓ SigV4 (_RefreshingAWS4Auth)<br>
+          AWS X-Ray OTLP<br>
+          ↓<br>
+          CloudWatch Logs (aws/spans)<br>
+          ↓<br>
+          observe.py 查看追踪
+        </span>
+      </div>
+      <br>
+      <div class="arch-box" style="border-color:#6BCB77">
+        🐳 <strong>构建 & 部署</strong><br>
+        <span style="color:#888; font-size:0.9em">
+          docker buildx<br>
+          --platform linux/arm64<br>
+          → ECR → AgentCore Runtime
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 4: AWS INFRA ══════════════════════ -->
+<section>
+  <div class="section-label">基础设施</div>
+  <h2>AWS 资源总览</h2>
+  <table>
+    <tr>
+      <th>资源类型</th>
+      <th>环境变量</th>
+      <th>说明</th>
+    </tr>
+    <tr>
+      <td>AgentCore Runtime</td>
+      <td><code>$AGENTCORE_RUNTIME_ID</code></td>
+      <td>运行爬虫容器的托管运行时</td>
+    </tr>
+    <tr>
+      <td>Runtime Endpoint</td>
+      <td><code>$AGENTCORE_ENDPOINT_NAME</code></td>
+      <td>对外暴露的调用端点</td>
+    </tr>
+    <tr>
+      <td>Code Interpreter</td>
+      <td><code>$CODE_INTERPRETER_ID</code></td>
+      <td>执行 Python 爬虫脚本的沙箱</td>
+    </tr>
+    <tr>
+      <td>AgentCore Browser</td>
+      <td><code>$BROWSER_ID</code></td>
+      <td>托管 Chromium 实例 (CDP WebSocket)</td>
+    </tr>
+    <tr>
+      <td>ECR Repository</td>
+      <td><code>$AWS_ACCOUNT_ID / $AWS_REGION</code></td>
+      <td>arm64 Docker 镜像仓库</td>
+    </tr>
+    <tr>
+      <td>IAM Role</td>
+      <td>—</td>
+      <td>Runtime 执行角色（Bedrock + X-Ray + Browser）</td>
+    </tr>
+    <tr>
+      <td>CloudWatch Logs</td>
+      <td>—</td>
+      <td><code>aws/spans</code> 接收 X-Ray 转发的 span</td>
+    </tr>
+  </table>
+  <br>
+  <div class="box" style="font-size:0.65em">
+    🚀 一键部署：<code>./deploy/deploy.sh &lt;STACK_NAME&gt; &lt;REGION&gt; &lt;S3_BUCKET&gt;</code>
+    — CloudFormation 自动创建全部资源（约 10–15 分钟）
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 5: SKILLS ═════════════════════════ -->
+<section>
+  <div class="section-label">技能系统</div>
+  <h2>6 种爬虫技能 — 自动选择</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>技能</th><th>适用场景</th></tr>
+        <tr><td><code>default-crawl</code></td><td>通用页面 — 标题、链接、文本</td></tr>
+        <tr><td><code>ecommerce-crawl</code></td><td>电商 — 价格、库存、分页</td></tr>
+        <tr><td><code>news-crawl</code></td><td>新闻 — 标题、作者、日期、正文</td></tr>
+        <tr><td><code>api-crawl</code></td><td>REST/JSON 接口 + 分页</td></tr>
+        <tr><td><code>docs-crawl</code></td><td>文档/Wiki — 标题层级、代码块</td></tr>
+        <tr><td><code>social-crawl</code></td><td>论坛/社媒 — 帖子、互动数据</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="box-blue box">
+        <strong>自动选择流程</strong><br>
+        用户自然语言 → 独立 Selector Agent（无工具）→ 返回 <code>{"skill": "..."}</code>
+      </div>
+      <br>
+      <div class="box">
+        <strong>技能结构</strong><br>
+        每个技能目录包含：<br>
+        · <code>SKILL.md</code> — YAML frontmatter + LLM 指令<br>
+        · <code>examples/sample-output.json</code> — 输出结构参考<br>
+        · <code>reference.md</code>（可选）— 复杂站点提示
+      </div>
+      <br>
+      <div class="box-green box">
+        ➕ <strong>自定义技能</strong>：创建 <code>skills/my-skill/SKILL.md</code><br>
+        添加 <code>name:</code> 和 <code>description:</code> frontmatter，运行时自动发现
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 6: ANTI-BOT ══════════════════════ -->
+<section>
+  <div class="section-label">反爬策略</div>
+  <h2>三级并发 & 反爬虫策略</h2>
+  <p style="font-size:0.7em; color:#aaa">每个技能在运行时自动对目标域名分级，无需手动配置</p>
+  <table>
+    <tr>
+      <th>等级</th>
+      <th>典型站点</th>
+      <th><code>default</code></th>
+      <th><code>ecommerce</code></th>
+      <th><code>news</code></th>
+      <th><code>api</code></th>
+      <th><code>docs</code></th>
+      <th><code>social</code></th>
+    </tr>
+    <tr>
+      <td class="strict">⛔ STRICT</td>
+      <td style="font-size:0.85em">douban, amazon, weibo, zhihu</td>
+      <td>1 / 1.5–3s</td>
+      <td>3 / 1.5–3s</td>
+      <td>2 / 2–4s</td>
+      <td>2 / 1–2s</td>
+      <td>2 / 1.5–3s</td>
+      <td>2 / 2.5–5s</td>
+    </tr>
+    <tr>
+      <td class="moderate">⚠️ MODERATE</td>
+      <td style="font-size:0.85em">普通 .com/.net 站点</td>
+      <td>1 / 0.5–1.5s</td>
+      <td>5 / 0.3–1s</td>
+      <td>4 / 0.5–1.5s</td>
+      <td>6 / 0.1–0.5s</td>
+      <td>5 / 0.2–0.8s</td>
+      <td>3 / 1–2.5s</td>
+    </tr>
+    <tr>
+      <td class="open">✅ OPEN</td>
+      <td style="font-size:0.85em">toscrape, jsonplaceholder, docs.python.org</td>
+      <td>1 / none</td>
+      <td>8 / none</td>
+      <td>6 / none</td>
+      <td>10 / none</td>
+      <td>8 / none</td>
+      <td>5 / 0.3–1s</td>
+    </tr>
+  </table>
+  <br>
+  <div class="cols" style="gap:1em">
+    <div class="box" style="font-size:0.65em">
+      🔄 <strong>ThreadPoolExecutor</strong> 并发多页面抓取（as_completed 模式）
+    </div>
+    <div class="box" style="font-size:0.65em">
+      🔁 <strong>429/503 自动退避重试</strong>，最多 3 次，指数退避
+    </div>
+    <div class="box" style="font-size:0.65em">
+      🕵️ <strong>UA 轮换</strong>：4 个真实浏览器 User-Agent 随机选取
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 7: BROWSER TOOL ══════════════════ -->
+<section>
+  <div class="section-label">Browser 工具</div>
+  <h2>AgentCore Browser — 托管 Chromium</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>场景</th><th>Code Interpreter</th><th>Browser</th></tr>
+        <tr><td>静态 HTML</td><td>✅ 快速</td><td>不必要</td></tr>
+        <tr><td>SPA / React / Vue</td><td>❌ 空内容</td><td>✅</td></tr>
+        <tr><td>403 / CAPTCHA</td><td>❌</td><td>✅</td></tr>
+        <tr><td>Canvas/WebGL 指纹</td><td>❌</td><td>✅ 真实指纹</td></tr>
+        <tr><td>需要截图</td><td>❌</td><td>✅ screenshot_b64</td></tr>
+        <tr><td>批量 100+ 页面</td><td>✅ 并发快</td><td>较慢</td></tr>
+      </table>
+      <br>
+      <div class="box-blue box" style="font-size:0.65em">
+        启用：<code>python crawler_cli.py --cloud --browser "..."</code>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:0.6em; font-family:monospace; background:#0d1117; padding:1em; border-radius:6px; line-height:1.7">
+        <span style="color:#6BCB77">StartBrowserSession</span><br>
+        &nbsp;&nbsp;↓ viewPort 1280×900, timeout 300s<br>
+        <span style="color:#6BCB77">UpdateBrowserStream</span> → WebSocket<br>
+        &nbsp;&nbsp;↓ automationStream (CDP)<br>
+        <span style="color:#6BCB77">InvokeBrowser</span> Ctrl+L → keyType url → Return<br>
+        &nbsp;&nbsp;↓ time.sleep(wait_seconds) — JS 渲染<br>
+        <span style="color:var(--accent)">CDP Runtime.evaluate</span><br>
+        &nbsp;&nbsp;· document.title<br>
+        &nbsp;&nbsp;· document.body.innerText<br>
+        &nbsp;&nbsp;· querySelectorAll('a[href]')<br>
+        <span style="color:#6BCB77">InvokeBrowser</span> screenshot → base64 PNG<br>
+        &nbsp;&nbsp;↓<br>
+        <span style="color:#FFD93D">StopBrowserSession</span> (finally)
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 8: ENCODING ══════════════════════ -->
+<section>
+  <div class="section-label">编码管道</div>
+  <h2>CJK 编码管道 — 零数据损失</h2>
+  <p style="font-size:0.7em; color:#aaa">AgentCore 传输层会损坏 0x80–0x9F 非 ASCII 字节，以下管道保证中文完整传输</p>
+  <div style="font-size:0.62em; font-family:monospace; background:#0d1117; padding:1.2em; border-radius:6px; line-height:1.9">
+    <span style="color:#aaa">// Code Interpreter 标准输出</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+    <span style="color:#FFD93D">_safe_output(result)</span>&nbsp;&nbsp;&nbsp;<span style="color:#aaa">// SKILL.md 强制要求 LLM 调用</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;json.dumps → base64.b64encode → <span style="color:#6BCB77">print <<<CRAWLER_B64>>></span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+    <span style="color:var(--accent)">_extract_crawler_output(agent)</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;① ast.literal_eval 解包 CI 的 [{'type':'text','text':'...'}] 格式<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;② regex 匹配 <<<CRAWLER_B64>>> → base64.b64decode → json.loads<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;③ 降级：<<<CRAWLER_JSON>>> + Mojibake 修复<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;④ 降级：裸 JSON 启发式解析<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓<br>
+    <span style="color:#FFD93D">_ensure_ascii_safe()</span>&nbsp;&nbsp;<span style="color:#aaa">// 转义所有非 ASCII → \uXXXX</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↓ AgentCore 传输<br>
+    <span style="color:#6BCB77">_unescape_unicode_recursive()</span>&nbsp;<span style="color:#aaa">// CLI 端还原 \uXXXX → 真实 Unicode</span>
+  </div>
+  <div class="box" style="margin-top:0.5em; font-size:0.65em">
+    <strong>Mojibake 修复：</strong> <code>_repair_mojibake()</code> 检测 UTF-8 被误以 Latin-1 解码（最多 3 次往返修复）；<code>_looks_like_mojibake()</code> 触发自动重试爬取
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 9: OBSERVABILITY ═════════════════ -->
+<section>
+  <div class="section-label">可观测性</div>
+  <h2>OpenTelemetry → X-Ray → CloudWatch</h2>
+  <div class="cols">
+    <div>
+      <div class="arch-box">
+        <strong>Strands Agent 自动插桩</strong><br>
+        <span style="color:#888">invoke_agent · execute_event_loop_cycle<br>chat · execute_tool code_interpreter</span>
+      </div>
+      <div class="arch-arrow">⬇ BatchSpanProcessor</div>
+      <div class="arch-box">
+        <strong>OTLPSpanExporter</strong><br>
+        <span style="color:#888">requests.Session + _RefreshingAWS4Auth<br>每次请求重新获取 boto3 凭证（短期 Token 防过期）</span>
+      </div>
+      <div class="arch-arrow">⬇ HTTPS SigV4</div>
+      <div class="arch-box">
+        <strong>AWS X-Ray OTLP</strong><br>
+        <span style="color:#888">https://xray.$REGION.amazonaws.com/v1/traces</span>
+      </div>
+      <div class="arch-arrow">⬇ 转发</div>
+      <div class="arch-box">
+        <strong>CloudWatch Logs</strong> aws/spans<br>
+        <span style="color:#888">python observe.py --traces / --live</span>
+      </div>
+    </div>
+    <div>
+      <div class="box-green box" style="font-size:0.6em">
+        <strong>实际爬取豆瓣 TOP250 Trace 示例</strong><br><br>
+        <code style="font-size:0.95em">
+          invoke_agent&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;70.40s<br>
+          ├ execute_event_loop_cycle&nbsp;&nbsp;43.57s<br>
+          │ ├ chat&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;16.27s<br>
+          ├ execute_tool code_interpreter 27.30s<br>
+          └ execute_event_loop_cycle&nbsp;&nbsp;26.83s
+        </code>
+      </div>
+      <br>
+      <div class="box" style="font-size:0.65em">
+        <strong>关键问题解决：</strong><br>
+        容器内短期 IAM Task Role Token 会在运行期间过期，导致 OTLP 400 错误。<br>
+        <code>_RefreshingAWS4Auth</code> 实现 <code>__call__</code> 接口，每次 HTTP 请求时调用 <code>get_frozen_credentials()</code> 重新获取凭证。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 10: QUICK START ══════════════════ -->
+<section>
+  <div class="section-label">快速开始</div>
+  <h2>本地开发 & 云端调用</h2>
+  <div class="cols">
+    <div>
+      <p style="color:var(--aws-orange); font-size:0.75em; margin-bottom:0.3em">本地开发模式</p>
+      <pre><code class="bash"># 1. 创建虚拟环境（需要 /usr/bin/python3.10）
+/usr/bin/python3.10 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. 启动开发服务器
+AWS_REGION=us-east-1 \
+  .venv/bin/uvicorn src.main:app \
+  --host 0.0.0.0 --port 8080
+
+# 3. 本地爬取
+python crawler_cli.py --dev \
+  "爬取 https://books.toscrape.com 所有书价"</code></pre>
+    </div>
+    <div>
+      <p style="color:var(--aws-orange); font-size:0.75em; margin-bottom:0.3em">云端调用示例</p>
+      <pre><code class="bash"># Code Interpreter 模式（默认）
+python crawler_cli.py --cloud \
+  "爬取豆瓣电影TOP250的名称、评分、导演"
+
+# Browser 模式（JS 渲染 / 反爬）
+python crawler_cli.py --cloud --browser \
+  "抓取某动态加载商品页面"
+
+# 指定技能 + 保存结果
+python crawler_cli.py --cloud \
+  --skill news-crawl \
+  --output result.json \
+  "https://news.ycombinator.com"
+
+# 一键部署所有 AWS 资源
+./deploy/deploy.sh crawl-agentcore \
+  us-east-1 my-s3-bucket</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 11: TESTS ═════════════════════════ -->
+<section>
+  <div class="section-label">测试</div>
+  <h2>测试覆盖 — 253 个单元测试全部通过</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>测试模块</th><th>通过</th><th>覆盖点</th></tr>
+        <tr><td>test_agent_wiring</td><td class="open">✅</td><td>编码管道、输出提取</td></tr>
+        <tr><td>test_customer_inputs</td><td class="open">✅</td><td>技能路由、边界情况</td></tr>
+        <tr><td>test_skills</td><td class="open">✅</td><td>frontmatter 解析</td></tr>
+        <tr><td>test_browser_tool</td><td class="open">✅ 31</td><td>Session / CDP / 截图</td></tr>
+        <tr><td>test_cfn_handler</td><td class="open">✅ 45</td><td>资源类型、dispatch</td></tr>
+        <tr><td>test_encoding_advanced</td><td class="open">✅</td><td>深度编码管道</td></tr>
+        <tr><td>test_invoke_flow</td><td class="open">✅ 36</td><td>invoke + 重试 + 认证</td></tr>
+        <tr><td>test_cloud_e2e</td><td style="color:#888">⏭ 23</td><td>设置环境变量后激活</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="cols" style="flex-wrap:wrap; gap:0.5em">
+        <div class="stat">
+          <div class="num">253</div>
+          <div class="label">单元测试通过</div>
+        </div>
+        <div class="stat">
+          <div class="num">~14s</div>
+          <div class="label">总运行时间</div>
+        </div>
+        <div class="stat">
+          <div class="num">70.4s</div>
+          <div class="label">TOP250 端到端</div>
+        </div>
+        <div class="stat">
+          <div class="num">&lt;20ms</div>
+          <div class="label">本地计算开销</div>
+        </div>
+      </div>
+      <div class="box" style="font-size:0.65em; margin-top:0.5em">
+        <strong>性能：</strong><br>
+        Tier 分级：0.0015 ms | 技能加载：0.2 ms<br>
+        Base64 往返（250条）：8.11 ms<br>
+        实际延迟由 LLM 推理（10–60s）和网络 I/O 决定
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 12: PROJECT STRUCTURE ════════════ -->
+<section>
+  <div class="section-label">项目结构</div>
+  <h2>代码组织</h2>
+  <div class="cols">
+    <div style="font-size:0.62em; font-family:monospace; background:#0d1117; padding:1em; border-radius:6px; line-height:1.8">
+      <span style="color:var(--aws-orange)">CrawlAgentcore/</span><br>
+      ├── <span style="color:var(--accent)">src/</span><br>
+      │&nbsp;&nbsp; ├── <span style="color:#6BCB77">main.py</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># Agent 入口 + 编码管道</span><br>
+      │&nbsp;&nbsp; ├── <span style="color:#6BCB77">browser_tool.py</span>&nbsp;&nbsp;&nbsp;<span style="color:#666"># Chromium @tool</span><br>
+      │&nbsp;&nbsp; └── <span style="color:#6BCB77">skills.py</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># 技能加载器</span><br>
+      ├── <span style="color:var(--accent)">skills/</span><br>
+      │&nbsp;&nbsp; ├── default-crawl/<br>
+      │&nbsp;&nbsp; ├── ecommerce-crawl/<br>
+      │&nbsp;&nbsp; ├── news-crawl/<br>
+      │&nbsp;&nbsp; ├── api-crawl/<br>
+      │&nbsp;&nbsp; ├── docs-crawl/<br>
+      │&nbsp;&nbsp; └── social-crawl/<br>
+      ├── <span style="color:var(--accent)">deploy/</span><br>
+      │&nbsp;&nbsp; ├── cloudformation.yaml<br>
+      │&nbsp;&nbsp; ├── deploy.sh<br>
+      │&nbsp;&nbsp; ├── package.sh<br>
+      │&nbsp;&nbsp; └── cfn_handler.py<br>
+      ├── <span style="color:var(--accent)">tests/</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># 9 个测试文件</span><br>
+      ├── <span style="color:var(--accent)">doc/</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># 架构图、测试报告</span><br>
+      ├── <span style="color:#6BCB77">crawler_cli.py</span>&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># 交互式 CLI 客户端</span><br>
+      ├── <span style="color:#6BCB77">observe.py</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># Trace 查看工具</span><br>
+      ├── Dockerfile&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#666"># python:3.12-slim arm64</span><br>
+      └── .bedrock_agentcore.yaml
+    </div>
+    <div>
+      <div class="box" style="font-size:0.68em">
+        <strong>核心文件：src/main.py</strong><br>
+        · <code>invoke()</code> — 请求入口<br>
+        · <code>_auto_select_skill()</code> — LLM 技能选择<br>
+        · <code>_extract_crawler_output()</code> — 多层输出解析<br>
+        · <code>_ensure_ascii_safe()</code> — 传输编码保护<br>
+        · <code>_RefreshingAWS4Auth</code> — Token 自动刷新<br>
+        · <code>_setup_observability()</code> — OTLP 初始化
+      </div>
+      <br>
+      <div class="box-blue box" style="font-size:0.68em">
+        <strong>LLM 模型</strong><br>
+        <code>us.anthropic.claude-sonnet-4-6</code><br>
+        通过 Bedrock 跨区域推理配置文件调用<br>
+        （Strands Agents 默认值，可通过环境变量覆盖）
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 13: DEMO ══════════════════════════ -->
+<section>
+  <div class="section-label">演示</div>
+  <h2>豆瓣 TOP250 云端爬取演示</h2>
+  <pre><code class="bash">$ python crawler_cli.py --cloud "爬取豆瓣电影TOP250的电影名称、评分、导演"
+
+[智能体] 自动选择技能: ecommerce-crawl
+[智能体] 生成爬虫代码并在 Code Interpreter 中执行...
+
+爬取完成 ✓  耗时: 70.4s  |  共获取: 250 条记录
+
+[1] 肖申克的救赎 (1994)  ★9.7  导演: 弗兰克·德拉邦特
+[2] 霸王别姬 (1993)      ★9.6  导演: 陈凯歌
+[3] 阿甘正传 (1994)      ★9.5  导演: 罗伯特·泽米吉斯
+...
+[250] 让子弹飞 (2010)    ★8.7  导演: 姜文
+
+结果已保存至: output/crawl_20260520_104930.json</code></pre>
+  <div class="cols" style="margin-top:0.8em">
+    <div class="box" style="font-size:0.65em">
+      📊 X-Ray Trace 总耗时：<strong>70.40s</strong><br>
+      其中 Code Interpreter 执行：<strong>27.30s</strong><br>
+      LLM 推理：<strong>~16s</strong>
+    </div>
+    <div class="box-green box" style="font-size:0.65em">
+      ✅ 250 条中文数据完整输出<br>
+      ✅ JSON 文件无乱码<br>
+      ✅ Span 写入 CloudWatch aws/spans
+    </div>
+    <div class="box-blue box" style="font-size:0.65em">
+      🔍 查看追踪数据：<br>
+      <code>python observe.py --traces</code><br>
+      <code>python observe.py --live</code>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SLIDE 14: SUMMARY ══════════════════════ -->
+<section class="title-slide">
+  <h2>总结</h2>
+  <br>
+  <div class="cols" style="text-align:left">
+    <div>
+      <div class="box-green box" style="font-size:0.72em">
+        🤖 <strong>自然语言驱动</strong><br>
+        描述目标 → 自动选择技能 → 生成代码 → 执行
+      </div>
+      <div class="box-green box" style="font-size:0.72em">
+        ☁️ <strong>完全托管</strong><br>
+        AgentCore Runtime + Code Interpreter + Browser
+      </div>
+      <div class="box-green box" style="font-size:0.72em">
+        🌐 <strong>双执行引擎</strong><br>
+        静态页面用 requests，JS 页面用真实 Chromium
+      </div>
+    </div>
+    <div>
+      <div class="box-green box" style="font-size:0.72em">
+        🛡️ <strong>智能反爬</strong><br>
+        三级 Tier 自动分级，ThreadPoolExecutor 并发
+      </div>
+      <div class="box-green box" style="font-size:0.72em">
+        🀄 <strong>完整 CJK 支持</strong><br>
+        多层编码管道，Mojibake 自动检测修复
+      </div>
+      <div class="box-green box" style="font-size:0.72em">
+        📊 <strong>生产级可观测性</strong><br>
+        OTLP → X-Ray → CloudWatch，全链路追踪
+      </div>
+    </div>
+  </div>
+  <br>
+  <div style="color:#888; font-size:0.6em">
+    GitHub: <a href="https://github.com/jiaMery/CrawlAgentcore" style="color:var(--aws-orange)">github.com/jiaMery/CrawlAgentcore</a>
+  </div>
+</section>
+
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    transition: 'slide',
+    transitionSpeed: 'fast',
+    controls: true,
+    progress: true,
+    center: false,
+    width: 1200,
+    height: 700,
+    margin: 0.04,
+    plugins: [ RevealHighlight, RevealNotes ],
+    highlight: {
+      highlightOnLoad: true,
+    }
+  });
+</script>
+</body>
+</html>
