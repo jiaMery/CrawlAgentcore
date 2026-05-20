@@ -5,3 +5,5 @@ __pycache__/
 *.egg-info/
 output/
 uv.lock
+envir.json
+*.json

@@ -592,6 +592,7 @@ python tests/run_test_cases.py
 | Browser CDP WebSocket timeout | `automationStream` not ENABLED in time | Increase retries in `_wait_stream_ready()`; check Browser instance status |
 | `ModuleNotFoundError: websocket` | `websocket-client` not installed | Add `websocket-client>=1.7.0` to `requirements.txt` and rebuild image |
 | `RuntimeClientError (500)` on `--cloud` invocation | Required environment variables not exported before running | `export AWS_REGION`, `AWS_ACCOUNT_ID`, `AGENTCORE_RUNTIME_ID`, `AGENTCORE_RUNTIME_ARN`, `AGENTCORE_ENDPOINT_ARN`, `CODE_INTERPRETER_ID`; add `BROWSER_ID` when using `--browser` |
+| `--browser` flag ignored — output has `status_code` field instead of `screenshot_b64` | Container image predates `browser_tool.py`; agent silently falls back to code_interpreter | Rebuild and push a new image; update Runtime to the new version |
 
 ---
 ---
@@ -1188,3 +1189,4 @@ python tests/run_test_cases.py
 | Browser CDP WebSocket 超时 | `automationStream` 未在规定时间内变为 ENABLED | 增大 `_wait_stream_ready()` 的重试次数；检查 Browser 实例状态 |
 | `ModuleNotFoundError: websocket` | 缺少 `websocket-client` 依赖 | 在 `requirements.txt` 中添加 `websocket-client>=1.7.0` 后重新构建镜像 |
 | `--cloud` 调用报 `RuntimeClientError (500)` | 运行前未导出所需环境变量 | `export AWS_REGION`、`AWS_ACCOUNT_ID`、`AGENTCORE_RUNTIME_ID`、`AGENTCORE_RUNTIME_ARN`、`AGENTCORE_ENDPOINT_ARN`、`CODE_INTERPRETER_ID`；使用 `--browser` 时额外导出 `BROWSER_ID` |
+| `--browser` 标志被忽略，输出含 `status_code` 而非 `screenshot_b64` | 容器镜像早于 `browser_tool.py` 提交，agent 静默降级为 code_interpreter | 重新构建并推送新镜像，将 Runtime 更新到新版本 |

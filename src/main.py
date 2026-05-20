@@ -124,7 +124,7 @@ SYSTEM_PROMPT_TEMPLATE = """You are a web-crawler code generator and executor.
   `response.text` to avoid charset mis-detection.
 """
 
-# Appended to system prompt when browser_crawl tool is available
+# Appended to system prompt when browser_crawl tool is available (auto mode)
 BROWSER_HINT = """
 ## Browser Tool (browser_crawl)
 
@@ -146,6 +146,23 @@ Call: browser_crawl(url="https://example.com", wait_seconds=3.0)
 Returns JSON with: url, title, text_content, links, screenshot_b64, method="browser"
 Parse the returned JSON string with json.loads() to access the fields.
 Do NOT use _safe_output() with browser results — return them directly in your reply.
+"""
+
+# Replaces browser hint when use_browser=True is explicitly set — MANDATORY
+BROWSER_FORCE = """
+## MANDATORY: You MUST use browser_crawl for this request
+
+The user has explicitly enabled browser mode. You MUST call browser_crawl() as your
+crawling tool. Do NOT use code_interpreter for the actual page fetch.
+
+### browser_crawl usage
+Call: browser_crawl(url="https://example.com", wait_seconds=3.0)
+- Increase wait_seconds to 5-8 for slow SPA sites or login pages
+- Returns JSON string: parse with json.loads() to get url, title, text_content, links, screenshot_b64, method="browser"
+- Do NOT wrap the result in _safe_output() — return it directly
+
+You may still use code_interpreter ONLY for post-processing the crawled data (e.g.,
+parsing JSON, filtering links, formatting output). The initial page fetch MUST use browser_crawl.
 """
 
 # ---------------------------------------------------------------------------
@@ -456,8 +473,8 @@ def invoke(payload: dict, context: dict) -> dict:
     tools = [code_interpreter_tool.code_interpreter]
     if use_browser and BROWSER_TOOL_AVAILABLE and _browser_crawl_tool is not None:
         tools.append(_browser_crawl_tool)
-        system_prompt = system_prompt + BROWSER_HINT
-        logger.info("Browser tool enabled for this request")
+        system_prompt = system_prompt + BROWSER_FORCE
+        logger.info("Browser tool FORCED for this request")
     elif use_browser and not BROWSER_TOOL_AVAILABLE:
         logger.warning("use_browser=True but browser tool is not available; falling back to code_interpreter")
 
