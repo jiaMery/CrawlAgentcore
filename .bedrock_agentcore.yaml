@@ -13,9 +13,9 @@ agents:
     aws:
       execution_role: null
       execution_role_auto_create: false
-      account: '387745077854'
-      region: us-east-1
-      ecr_repository: 387745077854.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore
+      account: '${AWS_ACCOUNT_ID}'
+      region: '${AWS_REGION:-us-east-1}'
+      ecr_repository: '${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION:-us-east-1}.amazonaws.com/crawler-agentcore'
       ecr_auto_create: false
       s3_path: null
       s3_auto_create: false
@@ -32,11 +32,11 @@ agents:
         idle_runtime_session_timeout: null
         max_lifetime: null
     bedrock_agentcore:
-      agent_id: crawlerAgentcore-MRLKrbCBnT
-      agent_arn: arn:aws:bedrock-agentcore:us-east-1:387745077854:runtime/crawlerAgentcore-MRLKrbCBnT
+      agent_id: '${AGENTCORE_RUNTIME_ID}'
+      agent_arn: '${AGENTCORE_RUNTIME_ARN}'
       agent_session_id: null
-      endpoint_name: crawlerEndpoint
-      endpoint_arn: arn:aws:bedrock-agentcore:us-east-1:387745077854:runtime/crawlerAgentcore-MRLKrbCBnT/runtime-endpoint/crawlerEndpoint
+      endpoint_name: '${AGENTCORE_ENDPOINT_NAME:-crawlerEndpoint}'
+      endpoint_arn: '${AGENTCORE_ENDPOINT_ARN}'
     codebuild:
       project_name: null
       execution_role: null

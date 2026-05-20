@@ -32,53 +32,7 @@ A [Strands Agents](https://github.com/strands-agents/sdk-python) powered crawler
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  User                                                               │
-│  $ python crawler_cli.py --cloud [--browser] "..."                  │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │ boto3  invoke_agent_runtime()
-                             │ payload: { prompt, skill?, use_browser? }
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  AWS Bedrock AgentCore Runtime  (arm64, us-east-1)                  │
-│                                                                     │
-│  ① Skill Selector ──── LLM picks best skill from 6 options         │
-│         │                                                           │
-│  ② Load SKILL.md ───── skill content → system prompt               │
-│         │                                                           │
-│  ③ Strands Agent ────── has 1 or 2 tools depending on use_browser  │
-│         │                                                           │
-│         ├─ use_browser=False (default) ──────────────────────────── │
-│         │   ④a Code Interpreter — Python script in sandbox         │
-│         │          └─ HTTP requests (requests + BS4) → Website      │
-│         │          └─ ThreadPoolExecutor (tier-aware concurrency)   │
-│         │          └─ SigV4 delays + 429/503 retry                  │
-│         │                                                           │
-│         └─ use_browser=True ─────────────────────────────────────── │
-│             ④b AgentCore Browser — managed Chromium session        │
-│                    └─ StartBrowserSession                           │
-│                    └─ CDP WebSocket (automation stream)             │
-│                    └─ Navigate + wait for JS render                 │
-│                    └─ JS inject: document.title / innerText / links │
-│                    └─ Screenshot (base64 PNG)                       │
-│                    └─ StopBrowserSession                            │
-│                                                                     │
-│  ⑤ Output Extraction ── unwrap CI format → decode base64/JSON      │
-│         │                                                           │
-│  ⑥ ASCII-safe Encode ── escape non-ASCII → \uXXXX for transport    │
-│         │                                                           │
-│  ⑦ Observability ─────── span → X-Ray OTLP (SigV4) → CloudWatch   │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │ JSON response
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  crawler_cli.py                                                     │
-│  └─ decode \uXXXX → display colored output → save JSON file        │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-> Open `architecture.drawio` in [draw.io](https://app.diagrams.net/) or the VS Code draw.io extension for the full diagram.
+![Architecture Diagram](doc/architecture.png)
 
 ---
 
@@ -86,13 +40,16 @@ A [Strands Agents](https://github.com/strands-agents/sdk-python) powered crawler
 
 | Resource | ID / URI | Status |
 |---|---|---|
-| ECR Repository | `xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore` | — |
-| AgentCore Runtime | `crawlerAgentcore-MRLKrbCBnT` | READY (v5) |
-| Runtime Endpoint | `crawlerEndpoint` (liveVersion: 5) | READY |
-| Code Interpreter | `crawlerCI-URXI2eonxQ` | us-east-1 |
-| AgentCore Browser | `crawlerBrowser-HCHUMemYzS` | READY |
-| IAM Execution Role | `AmazonBedrockAgentCoreRuntime-crawleragent` | — |
-| Region | `us-east-1` | — |
+| ECR Repository | `$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/crawler-agentcore` | — |
+| AgentCore Runtime | `$AGENTCORE_RUNTIME_ID` | set via env |
+| Runtime Endpoint | `$AGENTCORE_ENDPOINT_NAME` | set via env |
+| Code Interpreter | `$CODE_INTERPRETER_ID` | set via env |
+| AgentCore Browser | `$BROWSER_ID` | set via env |
+| IAM Execution Role | `AmazonBedrockAgentCoreRuntime-<ProjectName>` | — |
+| Region | `$AWS_REGION` | — |
+
+> All resource IDs are set via environment variables — see [Configuration](#configuration) and [Cloud Deployment](#cloud-deployment).  
+> Run `deploy/deploy.sh` to provision everything automatically.
 
 **IAM Role Permissions required:**
 - `bedrock:InvokeModel*` on `*` (for Claude inference profiles)
@@ -201,7 +158,7 @@ Returns: { url, title, text_content, links[], screenshot_b64, method="browser" }
 
 | Field | Value |
 |---|---|
-| Browser ID | `crawlerBrowser-HCHUMemYzS` |
+| Browser ID | `$BROWSER_ID` (set via environment variable) |
 | Network mode | PUBLIC |
 | Env var in Runtime | `BROWSER_ID` |
 | CDP protocol | WebSocket via `automationStream.streamEndpoint` |
@@ -240,11 +197,41 @@ python crawler_cli.py --dev --output results.json "爬取豆瓣电影TOP250"
 
 ### Cloud Deployment
 
+**Option A — One-click (recommended):**
+
 ```bash
+# Deploy all AWS resources automatically via CloudFormation
+export AWS_REGION=us-east-1
+aws s3 mb s3://my-deploy-bucket --region $AWS_REGION
+./deploy/deploy.sh crawl-agentcore $AWS_REGION my-deploy-bucket
+```
+
+After deployment the script prints all resource IDs. Export them before using the CLI:
+
+```bash
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export AWS_REGION=us-east-1
+export AGENTCORE_RUNTIME_ID=<from deploy output>
+export AGENTCORE_RUNTIME_ARN=<from deploy output>
+export AGENTCORE_ENDPOINT_NAME=crawlerEndpoint
+export CODE_INTERPRETER_ID=<from deploy output>
+export BROWSER_ID=<from deploy output>
+```
+
+**Option B — Manual build & update (existing resources):**
+
+```bash
+# Required env vars
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export AWS_REGION=us-east-1
+export AGENTCORE_RUNTIME_ID=<your-runtime-id>
+export AGENTCORE_ENDPOINT_NAME=crawlerEndpoint
+export BROWSER_ID=<your-browser-id>
+export ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/crawler-agentcore"
+
 # 1. Log in to ECR
-aws ecr get-login-password --region us-east-1 \
-  | docker login --username AWS --password-stdin \
-    xxxx.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region $AWS_REGION \
+  | docker login --username AWS --password-stdin $ECR_URI
 
 # 2. Create a buildx builder (docker-container driver, required for arm64 cross-build)
 docker buildx create --name mybuilder --driver docker-container --use
@@ -253,21 +240,22 @@ docker buildx create --name mybuilder --driver docker-container --use
 docker buildx build \
   --builder mybuilder \
   --platform linux/arm64 \
-  --tag xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore:v5 \
-  --tag xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore:latest \
+  --tag ${ECR_URI}:latest \
   --push .
 
-# 4. Update the AgentCore Runtime to the new image (include BROWSER_ID env var)
+# 4. Update the AgentCore Runtime to the new image
 python - <<'EOF'
-import boto3
-client = boto3.client("bedrock-agentcore-control", region_name="us-east-1")
-resp = client.get_agent_runtime(agentRuntimeId="crawlerAgentcore-MRLKrbCBnT")
-env = resp.get("environmentVariables", {})
-env["BROWSER_ID"] = "crawlerBrowser-HCHUMemYzS"
+import boto3, os
+client = boto3.client("bedrock-agentcore-control", region_name=os.environ["AWS_REGION"])
+rt_id  = os.environ["AGENTCORE_RUNTIME_ID"]
+resp   = client.get_agent_runtime(agentRuntimeId=rt_id)
+env    = resp.get("environmentVariables", {})
+env["BROWSER_ID"] = os.environ["BROWSER_ID"]
 client.update_agent_runtime(
-    agentRuntimeId="crawlerAgentcore-MRLKrbCBnT",
+    agentRuntimeId=rt_id,
     agentRuntimeArtifact={"containerConfiguration": {
-        "containerUri": "xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore:v5"
+        "containerUri": f"{os.environ['AWS_ACCOUNT_ID']}.dkr.ecr."
+                        f"{os.environ['AWS_REGION']}.amazonaws.com/crawler-agentcore:latest"
     }},
     roleArn=resp["roleArn"],
     networkConfiguration=resp.get("networkConfiguration", {}),
@@ -278,12 +266,12 @@ EOF
 
 # 5. Update the Endpoint to the new version
 python - <<'EOF'
-import boto3
-client = boto3.client("bedrock-agentcore-control", region_name="us-east-1")
+import boto3, os
+client = boto3.client("bedrock-agentcore-control", region_name=os.environ["AWS_REGION"])
 client.update_agent_runtime_endpoint(
-    agentRuntimeId="crawlerAgentcore-MRLKrbCBnT",
-    endpointName="crawlerEndpoint",
-    agentRuntimeVersion="5"
+    agentRuntimeId=os.environ["AGENTCORE_RUNTIME_ID"],
+    endpointName=os.environ["AGENTCORE_ENDPOINT_NAME"],
+    agentRuntimeVersion="LATEST",
 )
 print("Endpoint updating...")
 EOF
@@ -489,24 +477,31 @@ agents:
   create_agent:
     platform: linux/arm64
     aws:
-      account: 'xxxx'
-      region: us-east-1
-      ecr_repository: xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore
+      account: '${AWS_ACCOUNT_ID}'
+      region: '${AWS_REGION:-us-east-1}'
+      ecr_repository: '${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION:-us-east-1}.amazonaws.com/crawler-agentcore'
       observability:
         enabled: true
     bedrock_agentcore:
-      agent_id: crawlerAgentcore-MRLKrbCBnT
-      endpoint_name: crawlerEndpoint
+      agent_id: '${AGENTCORE_RUNTIME_ID}'
+      endpoint_name: '${AGENTCORE_ENDPOINT_NAME:-crawlerEndpoint}'
 ```
+
+> Values are interpolated from shell environment variables. Set them before running CLI commands (see [Cloud Deployment](#cloud-deployment)).
 
 ### Runtime Environment Variables
 
-| Variable | Value | Purpose |
+| Variable | Required | Purpose |
 |---|---|---|
-| `AWS_REGION` | `us-east-1` | Region for boto3 clients, X-Ray endpoint |
-| `CODE_INTERPRETER_ID` | `crawlerCI-URXI2eonxQ` | AgentCore Code Interpreter instance |
-| `BROWSER_ID` | `crawlerBrowser-HCHUMemYzS` | AgentCore Browser instance |
-| `OTEL_SERVICE_NAME` | `crawler-agentcore` | Service name in X-Ray / CloudWatch spans |
+| `AWS_ACCOUNT_ID` | yes | AWS account ID (used in ECR URI, ARNs) |
+| `AWS_REGION` | yes (default `us-east-1`) | Region for boto3 clients, X-Ray endpoint |
+| `AGENTCORE_RUNTIME_ID` | yes | AgentCore Runtime ID (output from deploy) |
+| `AGENTCORE_RUNTIME_ARN` | yes | AgentCore Runtime ARN (output from deploy) |
+| `AGENTCORE_ENDPOINT_NAME` | yes (default `crawlerEndpoint`) | Runtime Endpoint name |
+| `AGENTCORE_ENDPOINT_ARN` | yes | Runtime Endpoint ARN (output from deploy) |
+| `CODE_INTERPRETER_ID` | yes | AgentCore Code Interpreter ID (output from deploy) |
+| `BROWSER_ID` | yes | AgentCore Browser ID (output from deploy) |
+| `OTEL_SERVICE_NAME` | no (default `crawler-agentcore`) | Service name in X-Ray / CloudWatch spans |
 
 ### `requirements.txt`
 
@@ -524,16 +519,56 @@ websocket-client>=1.7.0         # CDP WebSocket for Browser tool
 
 ## Tests
 
-73 unit tests covering skill loading, payload routing, output extraction, encoding round-trips, and mojibake detection.
+### Latest Test Results
+
+> Full report: [doc/test_report.md](doc/test_report.md) — generated 2026-05-20
+
+| Category | Pass / Total | Notes |
+|---|---|---|
+| Unit tests (total) | **253 / 253** ✅ | ~14 s total |
+| Cloud E2E tests | **23 skipped** | Auto-activated when `AGENTCORE_RUNTIME_ID` etc. are set |
+| Tier classification | **8 / 8** ✅ | STRICT / MODERATE / OPEN |
+| Encoding roundtrip | **6 / 6** ✅ | CJK · Japanese · French · Symbols |
+| API crawl (jsonplaceholder) | **2 / 2** ✅ | 57–67 ms |
+| E-commerce crawl (books.toscrape.com) | **1 / 1** ✅ | 133 ms |
+| News crawl (Hacker News) | **1 / 1** ✅ | 287 ms |
+| browser_tool.py | **31 / 31** ✅ | Session / CDP / screenshot / navigation |
+| CloudFormation handler | **45 / 45** ✅ | All resource types, dispatch, wait_status |
+| invoke flow + retry logic | **36 / 36** ✅ | Auto-select, payload, retry, auth |
+
+### Performance Highlights
+
+| Operation | Mean | P95 |
+|---|---|---|
+| Skill loading (`list_skills`) | 0.202 ms | 0.260 ms |
+| Skill loading (`load_skill`) | 0.10 – 0.13 ms | < 0.20 ms |
+| `_ensure_ascii_safe` (250 items) | 4.75 ms | 4.98 ms |
+| Base64 round-trip (250 items) | 8.11 ms | 8.34 ms |
+| Tier classification | 0.0015 ms | 0.0016 ms |
+| Mojibake detection (250-item JSON) | 8.8 ms | 9.1 ms |
+
+> Local computation overhead < 20 ms total. Request latency is dominated by LLM inference (10–60 s) and network I/O.
+
+### Run Tests
 
 ```bash
-# Run all tests
+pip install pytest
 python -m pytest tests/ -v
 
-# By file
-python -m pytest tests/test_agent_wiring.py -v      # encoding pipeline
-python -m pytest tests/test_customer_inputs.py -v   # skill routing + edge cases
-python -m pytest tests/test_skills.py -v             # skill frontmatter
+# By module
+python -m pytest tests/test_agent_wiring.py -v        # encoding pipeline
+python -m pytest tests/test_customer_inputs.py -v     # skill routing + edge cases
+python -m pytest tests/test_skills.py -v               # skill frontmatter
+python -m pytest tests/test_browser_tool.py -v         # browser tool (mock boto3)
+python -m pytest tests/test_cfn_handler.py -v          # CloudFormation handler
+python -m pytest tests/test_encoding_advanced.py -v    # deep encoding pipeline
+python -m pytest tests/test_invoke_flow.py -v          # invoke flow + retry logic
+
+# Cloud E2E (requires deployed AgentCore Runtime)
+export AGENTCORE_RUNTIME_ID=<id>
+export AWS_REGION=us-east-1
+export AWS_ACCOUNT_ID=<account>
+python -m pytest tests/test_cloud_e2e.py -v
 
 # End-to-end test runner (requires live AgentCore Runtime)
 python tests/run_test_cases.py
@@ -556,6 +591,7 @@ python tests/run_test_cases.py
 | `browser_crawl` returns `{"error": "..."}` | Browser session failed to start or stream not ready | Check IAM Browser permissions; verify `BROWSER_ID` env var in Runtime |
 | Browser CDP WebSocket timeout | `automationStream` not ENABLED in time | Increase retries in `_wait_stream_ready()`; check Browser instance status |
 | `ModuleNotFoundError: websocket` | `websocket-client` not installed | Add `websocket-client>=1.7.0` to `requirements.txt` and rebuild image |
+| `RuntimeClientError (500)` on `--cloud` invocation | Required environment variables not exported before running | `export AWS_REGION`, `AWS_ACCOUNT_ID`, `AGENTCORE_RUNTIME_ID`, `AGENTCORE_RUNTIME_ARN`, `AGENTCORE_ENDPOINT_ARN`, `CODE_INTERPRETER_ID`; add `BROWSER_ID` when using `--browser` |
 
 ---
 ---
@@ -588,53 +624,7 @@ python tests/run_test_cases.py
 
 ## 架构
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  用户                                                               │
-│  $ python crawler_cli.py --cloud [--browser] "..."                  │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │ boto3  invoke_agent_runtime()
-                             │ payload: { prompt, skill?, use_browser? }
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  AWS Bedrock AgentCore Runtime  (arm64, us-east-1)                  │
-│                                                                     │
-│  ① 技能选择器 ─── LLM 从 6 个技能中选择最合适的一个                │
-│        │                                                            │
-│  ② 加载 SKILL.md ── 技能内容 → 系统提示词                          │
-│        │                                                            │
-│  ③ Strands Agent ── 根据 use_browser 决定使用哪个工具               │
-│        │                                                            │
-│        ├─ use_browser=False（默认）────────────────────────────── │
-│        │   ④a Code Interpreter — 在沙箱中执行 Python 脚本         │
-│        │          └─ HTTP 请求（requests + BS4） → 目标网站        │
-│        │          └─ ThreadPoolExecutor（Tier 感知并发）           │
-│        │          └─ SigV4 延迟 + 429/503 退避重试                 │
-│        │                                                            │
-│        └─ use_browser=True ──────────────────────────────────────  │
-│            ④b AgentCore Browser — 托管 Chromium 会话              │
-│                   └─ StartBrowserSession                            │
-│                   └─ CDP WebSocket（automation stream）             │
-│                   └─ 导航 + 等待 JS 渲染                            │
-│                   └─ JS 注入：title / innerText / links             │
-│                   └─ Screenshot（base64 PNG）                       │
-│                   └─ StopBrowserSession                             │
-│                                                                     │
-│  ⑤ 输出提取 ──── 解包 CI 格式 → 解码 base64/JSON                   │
-│        │                                                            │
-│  ⑥ ASCII 安全编码 ─ 将非 ASCII 字符转义为 \uXXXX 以通过传输层      │
-│        │                                                            │
-│  ⑦ 可观测性 ─────── span → X-Ray OTLP (SigV4) → CloudWatch        │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │ JSON 响应
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  crawler_cli.py                                                     │
-│  └─ 解码 \uXXXX → 彩色终端输出 → 保存 JSON 文件                    │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-> 用 [draw.io](https://app.diagrams.net/) 或 VS Code draw.io 扩展打开 `architecture.drawio` 查看完整架构图。
+![架构图](doc/architecture.png)
 
 ---
 
@@ -642,13 +632,16 @@ python tests/run_test_cases.py
 
 | 资源 | ID / URI | 状态 |
 |---|---|---|
-| ECR 镜像仓库 | `xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore` | — |
-| AgentCore Runtime | `crawlerAgentcore-MRLKrbCBnT` | READY (v5) |
-| Runtime Endpoint | `crawlerEndpoint`（liveVersion: 5） | READY |
-| Code Interpreter | `crawlerCI-URXI2eonxQ` | us-east-1 |
-| AgentCore Browser | `crawlerBrowser-HCHUMemYzS` | READY |
-| IAM 执行角色 | `AmazonBedrockAgentCoreRuntime-crawleragent` | — |
-| 区域 | `us-east-1` | — |
+| ECR 镜像仓库 | `$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/crawler-agentcore` | — |
+| AgentCore Runtime | `$AGENTCORE_RUNTIME_ID` | 由环境变量设置 |
+| Runtime Endpoint | `$AGENTCORE_ENDPOINT_NAME` | 由环境变量设置 |
+| Code Interpreter | `$CODE_INTERPRETER_ID` | 由环境变量设置 |
+| AgentCore Browser | `$BROWSER_ID` | 由环境变量设置 |
+| IAM 执行角色 | `AmazonBedrockAgentCoreRuntime-<ProjectName>` | — |
+| 区域 | `$AWS_REGION` | — |
+
+> 所有资源 ID 通过环境变量注入，参见[配置说明](#配置说明)和[云端部署](#云端部署)。  
+> 运行 `deploy/deploy.sh` 可自动创建全部资源。
 
 **IAM 角色所需权限：**
 - `bedrock:InvokeModel*`，Resource 为 `*`（覆盖 Claude 推理配置文件）
@@ -757,7 +750,7 @@ StopBrowserSession   ← 始终在 finally 块中执行
 
 | 字段 | 值 |
 |---|---|
-| Browser ID | `crawlerBrowser-HCHUMemYzS` |
+| Browser ID | `$BROWSER_ID`（通过环境变量设置） |
 | 网络模式 | PUBLIC |
 | Runtime 中的环境变量 | `BROWSER_ID` |
 | CDP 协议 | WebSocket via `automationStream.streamEndpoint` |
@@ -796,11 +789,39 @@ python crawler_cli.py --dev --output results.json "Fetch headlines from https://
 
 ### 云端部署
 
+**方式 A — 一键部署（推荐）：**
+
 ```bash
+export AWS_REGION=us-east-1
+aws s3 mb s3://my-deploy-bucket --region $AWS_REGION
+./deploy/deploy.sh crawl-agentcore $AWS_REGION my-deploy-bucket
+```
+
+部署完成后脚本会打印所有资源 ID，运行前导出以下变量：
+
+```bash
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export AWS_REGION=us-east-1
+export AGENTCORE_RUNTIME_ID=<deploy输出>
+export AGENTCORE_RUNTIME_ARN=<deploy输出>
+export AGENTCORE_ENDPOINT_NAME=crawlerEndpoint
+export CODE_INTERPRETER_ID=<deploy输出>
+export BROWSER_ID=<deploy输出>
+```
+
+**方式 B — 手动构建并更新（已有资源）：**
+
+```bash
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+export AWS_REGION=us-east-1
+export AGENTCORE_RUNTIME_ID=<your-runtime-id>
+export AGENTCORE_ENDPOINT_NAME=crawlerEndpoint
+export BROWSER_ID=<your-browser-id>
+export ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/crawler-agentcore"
+
 # 1. 登录 ECR
-aws ecr get-login-password --region us-east-1 \
-  | docker login --username AWS --password-stdin \
-    xxxx.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region $AWS_REGION \
+  | docker login --username AWS --password-stdin $ECR_URI
 
 # 2. 创建 buildx builder（docker-container driver，用于 arm64 跨架构构建）
 docker buildx create --name mybuilder --driver docker-container --use
@@ -809,21 +830,22 @@ docker buildx create --name mybuilder --driver docker-container --use
 docker buildx build \
   --builder mybuilder \
   --platform linux/arm64 \
-  --tag xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore:v5 \
-  --tag xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore:latest \
+  --tag ${ECR_URI}:latest \
   --push .
 
-# 4. 更新 AgentCore Runtime 使用新镜像（注入 BROWSER_ID 环境变量）
+# 4. 更新 AgentCore Runtime 使用新镜像
 python - <<'EOF'
-import boto3
-client = boto3.client("bedrock-agentcore-control", region_name="us-east-1")
-resp = client.get_agent_runtime(agentRuntimeId="crawlerAgentcore-MRLKrbCBnT")
-env = resp.get("environmentVariables", {})
-env["BROWSER_ID"] = "crawlerBrowser-HCHUMemYzS"
+import boto3, os
+client = boto3.client("bedrock-agentcore-control", region_name=os.environ["AWS_REGION"])
+rt_id  = os.environ["AGENTCORE_RUNTIME_ID"]
+resp   = client.get_agent_runtime(agentRuntimeId=rt_id)
+env    = resp.get("environmentVariables", {})
+env["BROWSER_ID"] = os.environ["BROWSER_ID"]
 client.update_agent_runtime(
-    agentRuntimeId="crawlerAgentcore-MRLKrbCBnT",
+    agentRuntimeId=rt_id,
     agentRuntimeArtifact={"containerConfiguration": {
-        "containerUri": "xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore:v5"
+        "containerUri": f"{os.environ['AWS_ACCOUNT_ID']}.dkr.ecr."
+                        f"{os.environ['AWS_REGION']}.amazonaws.com/crawler-agentcore:latest"
     }},
     roleArn=resp["roleArn"],
     networkConfiguration=resp.get("networkConfiguration", {}),
@@ -834,12 +856,12 @@ EOF
 
 # 5. 更新 Endpoint 指向新版本
 python - <<'EOF'
-import boto3
-client = boto3.client("bedrock-agentcore-control", region_name="us-east-1")
+import boto3, os
+client = boto3.client("bedrock-agentcore-control", region_name=os.environ["AWS_REGION"])
 client.update_agent_runtime_endpoint(
-    agentRuntimeId="crawlerAgentcore-MRLKrbCBnT",
-    endpointName="crawlerEndpoint",
-    agentRuntimeVersion="5"
+    agentRuntimeId=os.environ["AGENTCORE_RUNTIME_ID"],
+    endpointName=os.environ["AGENTCORE_ENDPOINT_NAME"],
+    agentRuntimeVersion="LATEST",
 )
 print("Endpoint 更新中...")
 EOF
@@ -1049,24 +1071,31 @@ agents:
   create_agent:
     platform: linux/arm64
     aws:
-      account: 'xxxx'
-      region: us-east-1
-      ecr_repository: xxxx.dkr.ecr.us-east-1.amazonaws.com/crawler-agentcore
+      account: '${AWS_ACCOUNT_ID}'
+      region: '${AWS_REGION:-us-east-1}'
+      ecr_repository: '${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION:-us-east-1}.amazonaws.com/crawler-agentcore'
       observability:
         enabled: true
     bedrock_agentcore:
-      agent_id: crawlerAgentcore-MRLKrbCBnT
-      endpoint_name: crawlerEndpoint
+      agent_id: '${AGENTCORE_RUNTIME_ID}'
+      endpoint_name: '${AGENTCORE_ENDPOINT_NAME:-crawlerEndpoint}'
 ```
+
+> 值从 Shell 环境变量插值获取，运行前请先 `export` 相关变量（参见[云端部署](#云端部署)）。
 
 ### Runtime 环境变量
 
-| 变量 | 值 | 用途 |
+| 变量 | 是否必填 | 用途 |
 |---|---|---|
-| `AWS_REGION` | `us-east-1` | boto3 客户端区域，X-Ray endpoint |
-| `CODE_INTERPRETER_ID` | `crawlerCI-URXI2eonxQ` | AgentCore Code Interpreter 实例 |
-| `BROWSER_ID` | `crawlerBrowser-HCHUMemYzS` | AgentCore Browser 实例 |
-| `OTEL_SERVICE_NAME` | `crawler-agentcore` | X-Ray / CloudWatch span 中的服务名称 |
+| `AWS_ACCOUNT_ID` | 是 | AWS 账号 ID（用于 ECR URI、ARN 构建） |
+| `AWS_REGION` | 是（默认 `us-east-1`） | boto3 客户端区域，X-Ray endpoint |
+| `AGENTCORE_RUNTIME_ID` | 是 | AgentCore Runtime ID（deploy 输出） |
+| `AGENTCORE_RUNTIME_ARN` | 是 | AgentCore Runtime ARN（deploy 输出） |
+| `AGENTCORE_ENDPOINT_NAME` | 是（默认 `crawlerEndpoint`） | Runtime Endpoint 名称 |
+| `AGENTCORE_ENDPOINT_ARN` | 是 | Runtime Endpoint ARN（deploy 输出） |
+| `CODE_INTERPRETER_ID` | 是 | AgentCore Code Interpreter ID（deploy 输出） |
+| `BROWSER_ID` | 是 | AgentCore Browser ID（deploy 输出） |
+| `OTEL_SERVICE_NAME` | 否（默认 `crawler-agentcore`） | X-Ray / CloudWatch span 中的服务名称 |
 
 ### `requirements.txt`
 
@@ -1084,16 +1113,58 @@ websocket-client>=1.7.0                 # Browser 工具的 CDP WebSocket
 
 ## 测试
 
-73 个单元测试，覆盖技能加载、Payload 路由、输出提取、编码往返和 Mojibake 检测。
+### 最新测试结果
+
+> 完整报告：[doc/test_report.md](doc/test_report.md)（生成时间：2026-05-20）
+
+| 类别 | 通过 / 总数 | 备注 |
+|---|---|---|
+| 单元测试（合计） | **253 / 253** ✅ | 总耗时约 14 秒 |
+| 云端 E2E 测试 | **23 跳过** | 设置 `AGENTCORE_RUNTIME_ID` 等后自动激活 |
+| Tier 分级 | **8 / 8** ✅ | STRICT / MODERATE / OPEN 全覆盖 |
+| 编码往返 | **6 / 6** ✅ | 中文 · 日文 · 法语重音 · 特殊符号 |
+| API 爬取（jsonplaceholder） | **2 / 2** ✅ | 57–67 ms |
+| 电商爬取（books.toscrape.com） | **1 / 1** ✅ | 133 ms |
+| 新闻爬取（Hacker News） | **1 / 1** ✅ | 287 ms |
+| browser_tool.py | **31 / 31** ✅ | 会话 / CDP / 截图 / 导航 |
+| CloudFormation handler | **45 / 45** ✅ | 全部资源类型、分发、wait_status |
+| invoke 流程 + 重试逻辑 | **36 / 36** ✅ | 自动选择、Payload、重试、认证 |
+
+### 性能亮点
+
+| 环节 | 平均耗时 | P95 |
+|---|---|---|
+| 技能加载（`list_skills`） | 0.202 ms | 0.260 ms |
+| 技能加载（`load_skill`） | 0.10 – 0.13 ms | < 0.20 ms |
+| 编码管道（250 条） | 4.75 ms | 4.98 ms |
+| Base64 往返（250 条） | 8.11 ms | 8.34 ms |
+| Tier 分级 | 0.0015 ms | 0.0016 ms |
+| Mojibake 检测（250 条 JSON） | 8.8 ms | 9.1 ms |
+| 实际 HTTP 爬取（OPEN 站点） | 57 – 290 ms | — |
+| LLM 推理（Claude ConverseStream） | 10 – 60 s | — |
+
+本地计算开销合计 **< 20 ms**，请求总延迟由网络 I/O 和 LLM 推理决定。
+
+### 运行测试
 
 ```bash
 # 运行所有测试
 python -m pytest tests/ -v
 
-# 按文件运行
-python -m pytest tests/test_agent_wiring.py -v      # 编码管道
-python -m pytest tests/test_customer_inputs.py -v   # 技能路由 + 边界情况
-python -m pytest tests/test_skills.py -v             # 技能 frontmatter
+# 按模块运行
+python -m pytest tests/test_agent_wiring.py -v        # 编码管道
+python -m pytest tests/test_customer_inputs.py -v     # 技能路由 + 边界情况
+python -m pytest tests/test_skills.py -v               # 技能 frontmatter
+python -m pytest tests/test_browser_tool.py -v         # Browser 工具（mock boto3）
+python -m pytest tests/test_cfn_handler.py -v          # CloudFormation handler
+python -m pytest tests/test_encoding_advanced.py -v    # 深度编码管道
+python -m pytest tests/test_invoke_flow.py -v          # invoke 流程 + 重试逻辑
+
+# 云端 E2E（需要已部署的 AgentCore Runtime）
+export AGENTCORE_RUNTIME_ID=<id>
+export AWS_REGION=us-east-1
+export AWS_ACCOUNT_ID=<account>
+python -m pytest tests/test_cloud_e2e.py -v
 
 # 端到端测试运行器（需要已运行的 AgentCore Runtime）
 python tests/run_test_cases.py
@@ -1116,3 +1187,4 @@ python tests/run_test_cases.py
 | `browser_crawl` 返回 `{"error": "..."}` | Browser Session 启动失败或 Stream 未就绪 | 检查 IAM Browser 权限；确认 Runtime 中已注入 `BROWSER_ID` 环境变量 |
 | Browser CDP WebSocket 超时 | `automationStream` 未在规定时间内变为 ENABLED | 增大 `_wait_stream_ready()` 的重试次数；检查 Browser 实例状态 |
 | `ModuleNotFoundError: websocket` | 缺少 `websocket-client` 依赖 | 在 `requirements.txt` 中添加 `websocket-client>=1.7.0` 后重新构建镜像 |
+| `--cloud` 调用报 `RuntimeClientError (500)` | 运行前未导出所需环境变量 | `export AWS_REGION`、`AWS_ACCOUNT_ID`、`AGENTCORE_RUNTIME_ID`、`AGENTCORE_RUNTIME_ARN`、`AGENTCORE_ENDPOINT_ARN`、`CODE_INTERPRETER_ID`；使用 `--browser` 时额外导出 `BROWSER_ID` |
