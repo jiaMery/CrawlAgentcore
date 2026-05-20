@@ -9,6 +9,7 @@
 
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -157,7 +158,8 @@ def main() -> None:
     args = parser.parse_args()
 
     import boto3
-    logs_client = boto3.client("logs", region_name="us-east-1")
+    region = os.environ.get("AWS_REGION", "us-east-1")
+    logs_client = boto3.client("logs", region_name=region)
 
     if args.live:
         live_monitor(logs_client)

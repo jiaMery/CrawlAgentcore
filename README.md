@@ -212,7 +212,7 @@ After deployment the script prints all resource IDs. Export them before using th
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 export AWS_REGION=us-east-1
 export AGENTCORE_RUNTIME_ID=<from deploy output>
-export AGENTCORE_RUNTIME_ARN=<from deploy output>
+export AGENTCORE_RUNTIME_ARN=<from deploy output>   # optional: auto-derived from RUNTIME_ID + account + region
 export AGENTCORE_ENDPOINT_NAME=crawlerEndpoint
 export CODE_INTERPRETER_ID=<from deploy output>
 export BROWSER_ID=<from deploy output>
@@ -336,17 +336,18 @@ The agent returns a JSON object:
 }
 ```
 
-When `--browser` is used and the Agent called `browser_crawl`, `crawler_output` contains:
+When `--browser` is used, the agent is **forced** to call `browser_crawl` for the page fetch (real managed Chromium). `crawler_output` contains the fields returned by `browser_crawl`:
 ```json
 {
   "url": "https://...",
   "title": "Page Title",
-  "text_content": "Rendered page text...",
+  "text_content": "Rendered page text (up to 50 000 chars)...",
   "links": [{ "text": "Link text", "href": "https://..." }],
   "screenshot_b64": "<base64 PNG>",
   "method": "browser"
 }
 ```
+> The agent may omit `screenshot_b64` and `method` when summarising output into `<<<CRAWLER_JSON>>>`. Check `browser_used: true` in the top-level response to confirm browser mode was active.
 
 ---
 
@@ -496,7 +497,7 @@ agents:
 | `AWS_ACCOUNT_ID` | yes | AWS account ID (used in ECR URI, ARNs) |
 | `AWS_REGION` | yes (default `us-east-1`) | Region for boto3 clients, X-Ray endpoint |
 | `AGENTCORE_RUNTIME_ID` | yes | AgentCore Runtime ID (output from deploy) |
-| `AGENTCORE_RUNTIME_ARN` | yes | AgentCore Runtime ARN (output from deploy) |
+| `AGENTCORE_RUNTIME_ARN` | no (auto-derived) | AgentCore Runtime ARN; auto-built from `RUNTIME_ID` + `AWS_ACCOUNT_ID` + `AWS_REGION` if unset |
 | `AGENTCORE_ENDPOINT_NAME` | yes (default `crawlerEndpoint`) | Runtime Endpoint name |
 | `AGENTCORE_ENDPOINT_ARN` | yes | Runtime Endpoint ARN (output from deploy) |
 | `CODE_INTERPRETER_ID` | yes | AgentCore Code Interpreter ID (output from deploy) |
@@ -804,7 +805,7 @@ aws s3 mb s3://my-deploy-bucket --region $AWS_REGION
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 export AWS_REGION=us-east-1
 export AGENTCORE_RUNTIME_ID=<deploy输出>
-export AGENTCORE_RUNTIME_ARN=<deploy输出>
+export AGENTCORE_RUNTIME_ARN=<deploy输出>   # 可选：可由 RUNTIME_ID + 账号 + 区域自动构建
 export AGENTCORE_ENDPOINT_NAME=crawlerEndpoint
 export CODE_INTERPRETER_ID=<deploy输出>
 export BROWSER_ID=<deploy输出>
@@ -927,18 +928,19 @@ Agent 返回 JSON 对象：
 }
 ```
 
-使用 `--browser` 且 Agent 调用了 `browser_crawl` 时，`crawler_output` 结构如下：
+使用 `--browser` 时，agent 会被**强制**调用 `browser_crawl` 完成页面抓取（真实托管 Chromium）。`crawler_output` 包含 `browser_crawl` 返回的字段：
 
 ```json
 {
   "url": "https://...",
   "title": "页面标题",
-  "text_content": "渲染后的页面文字内容...",
+  "text_content": "渲染后的页面文字内容（最多 50000 字符）...",
   "links": [{ "text": "链接文字", "href": "https://..." }],
   "screenshot_b64": "<base64 PNG>",
   "method": "browser"
 }
 ```
+> agent 在将结果写入 `<<<CRAWLER_JSON>>>` 时可能省略 `screenshot_b64` 和 `method` 字段。可通过顶层响应中的 `browser_used: true` 确认 browser 模式已生效。
 
 ---
 
@@ -1091,7 +1093,7 @@ agents:
 | `AWS_ACCOUNT_ID` | 是 | AWS 账号 ID（用于 ECR URI、ARN 构建） |
 | `AWS_REGION` | 是（默认 `us-east-1`） | boto3 客户端区域，X-Ray endpoint |
 | `AGENTCORE_RUNTIME_ID` | 是 | AgentCore Runtime ID（deploy 输出） |
-| `AGENTCORE_RUNTIME_ARN` | 是 | AgentCore Runtime ARN（deploy 输出） |
+| `AGENTCORE_RUNTIME_ARN` | 否（自动推导） | AgentCore Runtime ARN；未设置时由 `RUNTIME_ID` + `AWS_ACCOUNT_ID` + `AWS_REGION` 自动构建 |
 | `AGENTCORE_ENDPOINT_NAME` | 是（默认 `crawlerEndpoint`） | Runtime Endpoint 名称 |
 | `AGENTCORE_ENDPOINT_ARN` | 是 | Runtime Endpoint ARN（deploy 输出） |
 | `CODE_INTERPRETER_ID` | 是 | AgentCore Code Interpreter ID（deploy 输出） |

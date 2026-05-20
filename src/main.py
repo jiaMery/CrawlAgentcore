@@ -76,7 +76,9 @@ _setup_observability()
 # AgentCore Code Interpreter tool
 # ---------------------------------------------------------------------------
 REGION = os.environ.get("AWS_REGION", "us-east-1")
-CODE_INTERPRETER_ID = os.environ.get("CODE_INTERPRETER_ID", "crawlerCI-URXI2eonxQ")
+CODE_INTERPRETER_ID = os.environ.get("CODE_INTERPRETER_ID")
+if not CODE_INTERPRETER_ID:
+    raise RuntimeError("CODE_INTERPRETER_ID environment variable is not set")
 code_interpreter_tool = AgentCoreCodeInterpreter(region=REGION, identifier=CODE_INTERPRETER_ID)
 
 # ---------------------------------------------------------------------------
@@ -89,7 +91,7 @@ try:
         from browser_tool import browser_crawl as _browser_crawl_tool
     BROWSER_TOOL_AVAILABLE = True
     logger.info("Browser tool loaded (BROWSER_ID=%s)",
-                os.environ.get("BROWSER_ID", "crawlerBrowser-HCHUMemYzS"))
+                os.environ.get("BROWSER_ID", "<not set>"))
 except Exception as _e:
     BROWSER_TOOL_AVAILABLE = False
     _browser_crawl_tool = None

@@ -28,7 +28,7 @@ import boto3
 
 logger = logging.getLogger(__name__)
 
-BROWSER_ID = os.environ.get("BROWSER_ID", "crawlerBrowser-HCHUMemYzS")
+BROWSER_ID = os.environ.get("BROWSER_ID", "")
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 
 # ---------------------------------------------------------------------------

@@ -252,15 +252,31 @@ def _invoke_agent_cloud(payload: dict, session_id: str, timeout: int) -> dict:
     """Call the deployed AgentCore Runtime Endpoint via boto3."""
     import boto3
     from botocore.config import Config
+
+    region = os.environ.get("AWS_REGION", "us-east-1")
+    runtime_id = os.environ.get("AGENTCORE_RUNTIME_ID")
+    account_id = os.environ.get("AWS_ACCOUNT_ID")
+    endpoint_name = os.environ.get("AGENTCORE_ENDPOINT_NAME", "crawlerEndpoint")
+
+    if not runtime_id:
+        raise RuntimeError("AGENTCORE_RUNTIME_ID environment variable is not set")
+    if not account_id:
+        raise RuntimeError("AWS_ACCOUNT_ID environment variable is not set")
+
+    runtime_arn = (
+        os.environ.get("AGENTCORE_RUNTIME_ARN")
+        or f"arn:aws:bedrock-agentcore:{region}:{account_id}:runtime/{runtime_id}"
+    )
+
     client = boto3.client(
         "bedrock-agentcore",
-        region_name="us-east-1",
+        region_name=region,
         config=Config(read_timeout=timeout, connect_timeout=10),
     )
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     resp = client.invoke_agent_runtime(
-        agentRuntimeArn="arn:aws:bedrock-agentcore:us-east-1:387745077854:runtime/crawlerAgentcore-MRLKrbCBnT",
-        qualifier="crawlerEndpoint",
+        agentRuntimeArn=runtime_arn,
+        qualifier=endpoint_name,
         runtimeSessionId=session_id,
         contentType="application/json",
         accept="application/json",
