@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>基于 AWS AgentCore 的智能爬虫方案</title>
+  <title>基于 Amazon Bedrock AgentCore 的智能爬虫方案</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
@@ -121,7 +121,7 @@
 ══════════════════════════════════════════════════════ -->
 <section class="title-slide">
   <div class="eyebrow">AWS 解决方案架构</div>
-  <h1>基于 AWS AgentCore<br>的智能爬虫方案</h1>
+  <h1>基于 Amazon Bedrock AgentCore<br>的智能爬虫方案</h1>
   <div class="sub">面向企业数据采集场景的全托管 AI 原生架构</div>
   <div>
     <span class="badge">Amazon Bedrock AgentCore</span>
@@ -146,7 +146,7 @@
   <div class="cols" style="margin-top: 0.5em">
     <div>
       <div class="card card-teal">
-        <h4>01 &nbsp;AWS AgentCore 是什么</h4>
+        <h4>01 &nbsp;Amazon Bedrock AgentCore 是什么</h4>
         产品定位、核心组件与能力全览
       </div>
       <div class="card card-orange">
@@ -161,7 +161,7 @@
     <div>
       <div class="card card-blue">
         <h4>04 &nbsp;方案对比</h4>
-        EC2 自建 vs AWS AgentCore 全托管
+        EC2 自建 vs Amazon Bedrock AgentCore 全托管
       </div>
       <div class="card card-orange">
         <h4>05 &nbsp;AgentCore 方案架构</h4>
@@ -180,7 +180,7 @@
 ══════════════════════════════════════════════════════ -->
 <section class="section-slide">
   <div class="num" style="font-size:2em">☁️</div>
-  <h2>什么是 AWS AgentCore？</h2>
+  <h2>什么是 Amazon Bedrock AgentCore？</h2>
   <div class="desc">生产级 AI Agent 基础设施平台</div>
 </section>
 
@@ -189,7 +189,7 @@
 ══════════════════════════════════════════════════════ -->
 <section>
   <div class="chip">AgentCore 介绍</div>
-  <h2>AWS AgentCore — 面向生产的 AI Agent 平台</h2>
+  <h2>Amazon Bedrock AgentCore — 面向生产的 AI Agent 平台</h2>
   <div class="cols">
     <div>
       <div class="card card-orange" style="margin-bottom:0.5em; font-size:0.72em">
@@ -378,7 +378,7 @@
 <section class="section-slide">
   <div class="num">03</div>
   <h2>方案对比</h2>
-  <div class="desc">EC2 自建爬虫 vs AWS AgentCore 全托管方案</div>
+  <div class="desc">EC2 自建爬虫 vs Amazon Bedrock AgentCore 全托管方案</div>
 </section>
 
 <!-- ══════════════════════════════════════════════════════
@@ -391,7 +391,7 @@
     <tr>
       <th style="width:22%; text-align:left; color:#8fb3d4">对比维度</th>
       <th style="width:39%" class="ec2-col">🖥️ EC2 自建方案</th>
-      <th style="width:39%" class="ac-col">☁️ AWS AgentCore 方案</th>
+      <th style="width:39%" class="ac-col">☁️ Amazon Bedrock AgentCore 方案</th>
     </tr>
     <tr>
       <td>爬虫代码编写</td>
@@ -446,7 +446,7 @@
 ══════════════════════════════════════════════════════ -->
 <section>
   <div class="chip">AgentCore 优势</div>
-  <h2>AWS AgentCore 的核心差异化优势</h2>
+  <h2>Amazon Bedrock AgentCore 的核心差异化优势</h2>
   <div class="cols">
     <div>
       <div class="card card-teal">
@@ -550,6 +550,22 @@
         <span style="color:#6a8aaa">deploy/deploy.sh 自动创建所有资源</span>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════
+     SLIDE 11b: 架构图（实际图片）
+══════════════════════════════════════════════════════ -->
+<section>
+  <div class="chip">方案架构</div>
+  <h2>系统架构图</h2>
+  <div style="text-align:center; margin-top:0.3em">
+    <img src="architecture.png"
+         alt="CrawlAgentcore 系统架构图"
+         style="max-width:100%; max-height:560px; border-radius:8px; border:1px solid rgba(255,153,0,0.2); background:#fff; padding:4px;">
+  </div>
+  <div class="footnote" style="text-align:center; margin-top:0.4em">
+    Client → Amazon Bedrock AgentCore Runtime → Strands Agent → Code Interpreter / AgentCore Browser → X-Ray / CloudWatch
   </div>
 </section>
 
@@ -678,7 +694,7 @@
       </div>
     </div>
   </div>
-  <div class="footnote">* CPU/内存定价来源：AWS AgentCore 官方定价页面（2026年）；Claude Sonnet 参考 Bedrock on-demand 定价；实际费用因任务复杂度和 token 用量而异</div>
+  <div class="footnote">* CPU/内存定价来源：Amazon Bedrock AgentCore 官方定价页面（2026年）；Claude Sonnet 参考 Bedrock on-demand 定价；实际费用因任务复杂度和 token 用量而异</div>
 </section>
 
 <!-- ══════════════════════════════════════════════════════
@@ -809,7 +825,7 @@
 ══════════════════════════════════════════════════════ -->
 <section>
   <div class="chip">总结</div>
-  <h2>为什么选择 AWS AgentCore 智能爬虫方案？</h2>
+  <h2>为什么选择 Amazon Bedrock AgentCore 智能爬虫方案？</h2>
   <div class="cols">
     <div>
       <div class="card card-teal">
