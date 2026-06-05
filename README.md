@@ -48,8 +48,7 @@ A [Strands Agents](https://github.com/strands-agents/sdk-python) powered crawler
 | IAM Execution Role | `AmazonBedrockAgentCoreRuntime-<ProjectName>` | — |
 | Region | `$AWS_REGION` | — |
 
-> All resource IDs are set via environment variables — see [Configuration](#configuration) and [Cloud Deployment](#cloud-deployment).  
-> Run `deploy/deploy.sh` to provision everything automatically.
+> All resource IDs are set via environment variables — see [Configuration](#configuration) and [Cloud Deployment](#cloud-deployment).
 
 **IAM Role Permissions required:**
 - `bedrock:InvokeModel*` on `*` (for Claude inference profiles)
@@ -163,6 +162,69 @@ Returns: { url, title, text_content, links[], screenshot_b64, method="browser" }
 | Env var in Runtime | `BROWSER_ID` |
 | CDP protocol | WebSocket via `automationStream.streamEndpoint` |
 
+### Web Bot Auth
+
+Web Bot Auth is a draft IETF protocol that cryptographically identifies the agent to bot-control vendors (Cloudflare, HUMAN Security, Akamai, DataDome) so CAPTCHA challenges and 403 blocks are reduced. The browser instance signs every outgoing HTTP request with a private key; vendors verify the signature using a public key and apply per-identity policies.
+
+**Enabling Web Bot Auth:**
+
+1. Create an IAM role with the following trust policy (replace `111122223333` and region):
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "BedrockAgentCoreBuiltInTools",
+    "Effect": "Allow",
+    "Principal": { "Service": "bedrock-agentcore.amazonaws.com" },
+    "Action": "sts:AssumeRole",
+    "Condition": {
+      "StringEquals": { "aws:SourceAccount": "111122223333" },
+      "ArnLike": { "aws:SourceArn": "arn:aws:bedrock-agentcore:us-east-1:111122223333:*" }
+    }
+  }]
+}
+```
+
+2. Set environment variables before starting the Runtime:
+
+```bash
+export BROWSER_SIGNING_ENABLED=true
+export BROWSER_EXECUTION_ROLE_ARN=arn:aws:iam::<account-id>:role/<role-name>
+```
+
+3. On first use, `browser_tool.py` calls `create_browser()` with `browserSigning={"enabled": True}` and caches the resulting browser ID. Subsequent calls reuse the same browser instance.
+
+**AWS CLI / Boto3 equivalent:**
+
+```bash
+aws bedrock-agentcore-control create-browser \
+  --region $AWS_REGION \
+  --name "crawler-browser-signed" \
+  --network-configuration '{"networkMode": "PUBLIC"}' \
+  --execution-role-arn "$BROWSER_EXECUTION_ROLE_ARN" \
+  --browser-signing '{"enabled": true}'
+```
+
+```python
+import boto3
+client = boto3.client("bedrock-agentcore-control", region_name="us-east-1")
+response = client.create_browser(
+    name="crawler-browser-signed",
+    networkConfiguration={"networkMode": "PUBLIC"},
+    executionRoleArn="arn:aws:iam::<account-id>:role/<role-name>",
+    browserSigning={"enabled": True},
+)
+browser_id = response["browserId"]
+```
+
+| Env var | Required | Purpose |
+|---|---|---|
+| `BROWSER_SIGNING_ENABLED` | no (default `false`) | Set to `true` to enable Web Bot Auth |
+| `BROWSER_EXECUTION_ROLE_ARN` | yes (if signing enabled) | IAM role ARN with trust policy for `bedrock-agentcore.amazonaws.com` |
+
+> Web Bot Auth is disabled by default. When disabled, `BROWSER_ID` is used as before. When enabled, `BROWSER_ID` is ignored and a signing-enabled browser is created/reused automatically.
+
 ---
 
 ## Quick Start
@@ -196,29 +258,6 @@ python crawler_cli.py --dev --output results.json "爬取豆瓣电影TOP250"
 > **Why uvicorn directly?** `bedrock-agentcore` v1.9.1 removed the CLI subcommands (`agentcore dev`). The app is a standard FastAPI/Uvicorn ASGI app — start it directly.
 
 ### Cloud Deployment
-
-**Option A — One-click (recommended):**
-
-```bash
-# Deploy all AWS resources automatically via CloudFormation
-export AWS_REGION=us-east-1
-aws s3 mb s3://my-deploy-bucket --region $AWS_REGION
-./deploy/deploy.sh crawl-agentcore $AWS_REGION my-deploy-bucket
-```
-
-After deployment the script prints all resource IDs. Export them before using the CLI:
-
-```bash
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-export AWS_REGION=us-east-1
-export AGENTCORE_RUNTIME_ID=<from deploy output>
-export AGENTCORE_RUNTIME_ARN=<from deploy output>   # optional: auto-derived from RUNTIME_ID + account + region
-export AGENTCORE_ENDPOINT_NAME=crawlerEndpoint
-export CODE_INTERPRETER_ID=<from deploy output>
-export BROWSER_ID=<from deploy output>
-```
-
-**Option B — Manual build & update (existing resources):**
 
 ```bash
 # Required env vars
@@ -501,7 +540,9 @@ agents:
 | `AGENTCORE_ENDPOINT_NAME` | yes (default `crawlerEndpoint`) | Runtime Endpoint name |
 | `AGENTCORE_ENDPOINT_ARN` | yes | Runtime Endpoint ARN (output from deploy) |
 | `CODE_INTERPRETER_ID` | yes | AgentCore Code Interpreter ID (output from deploy) |
-| `BROWSER_ID` | yes | AgentCore Browser ID (output from deploy) |
+| `BROWSER_ID` | yes (when signing disabled) | AgentCore Browser ID (output from deploy) |
+| `BROWSER_SIGNING_ENABLED` | no (default `false`) | Set to `true` to enable Web Bot Auth request signing |
+| `BROWSER_EXECUTION_ROLE_ARN` | yes (when signing enabled) | IAM role ARN with `bedrock-agentcore.amazonaws.com` trust policy |
 | `OTEL_SERVICE_NAME` | no (default `crawler-agentcore`) | Service name in X-Ray / CloudWatch spans |
 
 ### `requirements.txt`
@@ -534,7 +575,6 @@ websocket-client>=1.7.0         # CDP WebSocket for Browser tool
 | E-commerce crawl (books.toscrape.com) | **1 / 1** ✅ | 133 ms |
 | News crawl (Hacker News) | **1 / 1** ✅ | 287 ms |
 | browser_tool.py | **31 / 31** ✅ | Session / CDP / screenshot / navigation |
-| CloudFormation handler | **45 / 45** ✅ | All resource types, dispatch, wait_status |
 | invoke flow + retry logic | **36 / 36** ✅ | Auto-select, payload, retry, auth |
 
 ### Performance Highlights
@@ -561,7 +601,6 @@ python -m pytest tests/test_agent_wiring.py -v        # encoding pipeline
 python -m pytest tests/test_customer_inputs.py -v     # skill routing + edge cases
 python -m pytest tests/test_skills.py -v               # skill frontmatter
 python -m pytest tests/test_browser_tool.py -v         # browser tool (mock boto3)
-python -m pytest tests/test_cfn_handler.py -v          # CloudFormation handler
 python -m pytest tests/test_encoding_advanced.py -v    # deep encoding pipeline
 python -m pytest tests/test_invoke_flow.py -v          # invoke flow + retry logic
 
@@ -642,8 +681,7 @@ python tests/run_test_cases.py
 | IAM 执行角色 | `AmazonBedrockAgentCoreRuntime-<ProjectName>` | — |
 | 区域 | `$AWS_REGION` | — |
 
-> 所有资源 ID 通过环境变量注入，参见[配置说明](#配置说明)和[云端部署](#云端部署)。  
-> 运行 `deploy/deploy.sh` 可自动创建全部资源。
+> 所有资源 ID 通过环境变量注入，参见[配置说明](#配置说明)和[云端部署](#云端部署)。
 
 **IAM 角色所需权限：**
 - `bedrock:InvokeModel*`，Resource 为 `*`（覆盖 Claude 推理配置文件）
@@ -757,6 +795,69 @@ StopBrowserSession   ← 始终在 finally 块中执行
 | Runtime 中的环境变量 | `BROWSER_ID` |
 | CDP 协议 | WebSocket via `automationStream.streamEndpoint` |
 
+### Web Bot Auth（网络机器人认证）
+
+Web Bot Auth 是 IETF 草案协议，能让 Agent 对机器人流量控制厂商（Cloudflare、HUMAN Security、Akamai、DataDome）进行密码学身份认证，从而减少 CAPTCHA 挑战和 403 封锁。浏览器实例对每个出站 HTTP 请求使用私钥签名，厂商用公钥验证签名并应用对应策略。
+
+**启用方式：**
+
+1. 创建一个 IAM 角色，配置如下信任策略（替换 `111122223333` 和区域）：
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "BedrockAgentCoreBuiltInTools",
+    "Effect": "Allow",
+    "Principal": { "Service": "bedrock-agentcore.amazonaws.com" },
+    "Action": "sts:AssumeRole",
+    "Condition": {
+      "StringEquals": { "aws:SourceAccount": "111122223333" },
+      "ArnLike": { "aws:SourceArn": "arn:aws:bedrock-agentcore:us-east-1:111122223333:*" }
+    }
+  }]
+}
+```
+
+2. 启动 Runtime 前设置环境变量：
+
+```bash
+export BROWSER_SIGNING_ENABLED=true
+export BROWSER_EXECUTION_ROLE_ARN=arn:aws:iam::<account-id>:role/<role-name>
+```
+
+3. 首次使用时，`browser_tool.py` 会自动调用 `create_browser()` 并传入 `browserSigning={"enabled": True}`，将创建的 Browser ID 缓存供后续请求复用。
+
+**AWS CLI / Boto3 等效操作：**
+
+```bash
+aws bedrock-agentcore-control create-browser \
+  --region $AWS_REGION \
+  --name "crawler-browser-signed" \
+  --network-configuration '{"networkMode": "PUBLIC"}' \
+  --execution-role-arn "$BROWSER_EXECUTION_ROLE_ARN" \
+  --browser-signing '{"enabled": true}'
+```
+
+```python
+import boto3
+client = boto3.client("bedrock-agentcore-control", region_name="us-east-1")
+response = client.create_browser(
+    name="crawler-browser-signed",
+    networkConfiguration={"networkMode": "PUBLIC"},
+    executionRoleArn="arn:aws:iam::<account-id>:role/<role-name>",
+    browserSigning={"enabled": True},
+)
+browser_id = response["browserId"]
+```
+
+| 环境变量 | 是否必填 | 用途 |
+|---|---|---|
+| `BROWSER_SIGNING_ENABLED` | 否（默认 `false`） | 设为 `true` 启用 Web Bot Auth |
+| `BROWSER_EXECUTION_ROLE_ARN` | 是（启用签名时必填） | 已配置 `bedrock-agentcore.amazonaws.com` 信任策略的 IAM 角色 ARN |
+
+> Web Bot Auth 默认关闭。关闭时沿用 `BROWSER_ID` 环境变量。开启时忽略 `BROWSER_ID`，自动创建并复用启用签名的 Browser 实例。
+
 ---
 
 ## 快速开始
@@ -790,28 +891,6 @@ python crawler_cli.py --dev --output results.json "Fetch headlines from https://
 > **为什么直接用 uvicorn？** `bedrock-agentcore` v1.9.1 删除了 CLI 子命令（`agentcore dev` 不再可用）。本项目是标准 FastAPI/Uvicorn ASGI 应用，直接启动即可。
 
 ### 云端部署
-
-**方式 A — 一键部署（推荐）：**
-
-```bash
-export AWS_REGION=us-east-1
-aws s3 mb s3://my-deploy-bucket --region $AWS_REGION
-./deploy/deploy.sh crawl-agentcore $AWS_REGION my-deploy-bucket
-```
-
-部署完成后脚本会打印所有资源 ID，运行前导出以下变量：
-
-```bash
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-export AWS_REGION=us-east-1
-export AGENTCORE_RUNTIME_ID=<deploy输出>
-export AGENTCORE_RUNTIME_ARN=<deploy输出>   # 可选：可由 RUNTIME_ID + 账号 + 区域自动构建
-export AGENTCORE_ENDPOINT_NAME=crawlerEndpoint
-export CODE_INTERPRETER_ID=<deploy输出>
-export BROWSER_ID=<deploy输出>
-```
-
-**方式 B — 手动构建并更新（已有资源）：**
 
 ```bash
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -1097,7 +1176,9 @@ agents:
 | `AGENTCORE_ENDPOINT_NAME` | 是（默认 `crawlerEndpoint`） | Runtime Endpoint 名称 |
 | `AGENTCORE_ENDPOINT_ARN` | 是 | Runtime Endpoint ARN（deploy 输出） |
 | `CODE_INTERPRETER_ID` | 是 | AgentCore Code Interpreter ID（deploy 输出） |
-| `BROWSER_ID` | 是 | AgentCore Browser ID（deploy 输出） |
+| `BROWSER_ID` | 是（禁用签名时） | AgentCore Browser ID（deploy 输出） |
+| `BROWSER_SIGNING_ENABLED` | 否（默认 `false`） | 设为 `true` 启用 Web Bot Auth 请求签名 |
+| `BROWSER_EXECUTION_ROLE_ARN` | 是（启用签名时） | 配置了 bedrock-agentcore.amazonaws.com 信任策略的 IAM 角色 ARN |
 | `OTEL_SERVICE_NAME` | 否（默认 `crawler-agentcore`） | X-Ray / CloudWatch span 中的服务名称 |
 
 ### `requirements.txt`
@@ -1130,7 +1211,6 @@ websocket-client>=1.7.0                 # Browser 工具的 CDP WebSocket
 | 电商爬取（books.toscrape.com） | **1 / 1** ✅ | 133 ms |
 | 新闻爬取（Hacker News） | **1 / 1** ✅ | 287 ms |
 | browser_tool.py | **31 / 31** ✅ | 会话 / CDP / 截图 / 导航 |
-| CloudFormation handler | **45 / 45** ✅ | 全部资源类型、分发、wait_status |
 | invoke 流程 + 重试逻辑 | **36 / 36** ✅ | 自动选择、Payload、重试、认证 |
 
 ### 性能亮点
@@ -1159,7 +1239,6 @@ python -m pytest tests/test_agent_wiring.py -v        # 编码管道
 python -m pytest tests/test_customer_inputs.py -v     # 技能路由 + 边界情况
 python -m pytest tests/test_skills.py -v               # 技能 frontmatter
 python -m pytest tests/test_browser_tool.py -v         # Browser 工具（mock boto3）
-python -m pytest tests/test_cfn_handler.py -v          # CloudFormation handler
 python -m pytest tests/test_encoding_advanced.py -v    # 深度编码管道
 python -m pytest tests/test_invoke_flow.py -v          # invoke 流程 + 重试逻辑
 

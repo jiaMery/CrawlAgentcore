@@ -334,6 +334,16 @@ class TestStopSession(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestBrowserCrawlImpl(unittest.TestCase):
+    def setUp(self):
+        self._bid_patcher = patch(
+            "src.browser_tool.get_effective_browser_id",
+            return_value="test-browser-id",
+        )
+        self._bid_patcher.start()
+
+    def tearDown(self):
+        self._bid_patcher.stop()
+
     def _make_full_mock(self):
         """构造 _browser_crawl_impl 完整正常路径所需的所有 mock。"""
         mock_client = _make_boto3_client_mock(
@@ -466,6 +476,16 @@ class TestBrowserCrawlImpl(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestBrowserCrawlTool(unittest.TestCase):
+    def setUp(self):
+        self._bid_patcher = patch(
+            "src.browser_tool.get_effective_browser_id",
+            return_value="test-browser-id",
+        )
+        self._bid_patcher.start()
+
+    def tearDown(self):
+        self._bid_patcher.stop()
+
     @patch("src.browser_tool.time")
     def test_returns_json_string(self, mock_time):
         from src.browser_tool import browser_crawl

@@ -498,7 +498,8 @@ class TestRefreshingAWS4Auth(unittest.TestCase):
 
         captured = {}
 
-        with patch("requests_aws4auth.AWS4Auth") as mock_auth_cls:
+        with patch.dict(os.environ, {"CODE_INTERPRETER_ID": "test-ci-id"}):
+          with patch("requests_aws4auth.AWS4Auth") as mock_auth_cls:
             mock_auth_cls.return_value = lambda r: r
 
             from src.main import _RefreshingAWS4Auth

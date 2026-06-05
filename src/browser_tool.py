@@ -1,16 +1,22 @@
 """AgentCore Browser tool for CrawlAgentcore.
 
 Wraps the AWS Bedrock AgentCore Browser API as a Strands @tool so the Agent
-can call browser_crawl(url, extract_js=True) for STRICT / JS-heavy sites.
+can call browser_crawl(url, wait_seconds) for JS-heavy / bot-protected sites.
 
 Workflow:
   1. StartBrowserSession  — creates a managed Chromium session
   2. UpdateBrowserStream  — activates the automation stream (ENABLED)
-  3. InvokeBrowser(navigate via keyType on address bar) + screenshot
-  4. InvokeBrowser(screenshot) — capture rendered page
-  5. Extract text / links from screenshot via LLM vision, OR inject JS
-     via CDP WebSocket automation stream to pull document.body.innerText
-  6. StopBrowserSession   — always cleanup
+  3. InvokeBrowser(navigate via keyType on address bar)
+  4. CDP WebSocket: extract title / text / links via Runtime.evaluate
+  5. InvokeBrowser(screenshot) — capture rendered page as base64 PNG
+  6. StopBrowserSession   — always runs in finally block
+
+Web Bot Auth (optional):
+  When BROWSER_SIGNING_ENABLED=true and BROWSER_EXECUTION_ROLE_ARN is set,
+  the browser instance is created with browserSigning.enabled=True.
+  This cryptographically identifies the agent to bot-control vendors
+  (Cloudflare, HUMAN Security, Akamai, DataDome) so CAPTCHA challenges are
+  reduced. Transparent — no code changes needed in crawl logic.
 
 The tool returns a dict compatible with what the main agent expects:
   {"url": ..., "title": ..., "text_content": ..., "links": [...],
@@ -31,13 +37,87 @@ logger = logging.getLogger(__name__)
 BROWSER_ID = os.environ.get("BROWSER_ID", "")
 REGION = os.environ.get("AWS_REGION", "us-east-1")
 
+# Web Bot Auth — opt-in via environment variables
+_SIGNING_ENABLED = os.environ.get("BROWSER_SIGNING_ENABLED", "").lower() in ("1", "true", "yes")
+_EXECUTION_ROLE_ARN = os.environ.get("BROWSER_EXECUTION_ROLE_ARN", "")
+
+
 # ---------------------------------------------------------------------------
-# Low-level helpers
+# boto3 clients
 # ---------------------------------------------------------------------------
 
 def _rt_client():
+    """Runtime client — used for session lifecycle and InvokeBrowser."""
     return boto3.client("bedrock-agentcore", region_name=REGION)
 
+
+def _ctrl_client():
+    """Control-plane client — used for create_browser (Web Bot Auth setup)."""
+    return boto3.client("bedrock-agentcore-control", region_name=REGION)
+
+
+# ---------------------------------------------------------------------------
+# Web Bot Auth helpers
+# ---------------------------------------------------------------------------
+
+def ensure_browser_with_signing(browser_name: str = "crawler-browser-signed") -> str:
+    """Create (or return existing) a Browser instance with Web Bot Auth enabled.
+
+    Called once at startup when BROWSER_SIGNING_ENABLED=true.
+    Returns the browserIdentifier of the created/existing browser.
+
+    Requires:
+      BROWSER_EXECUTION_ROLE_ARN — IAM role with trust policy allowing
+        bedrock-agentcore.amazonaws.com to assume it (see README).
+    """
+    if not _EXECUTION_ROLE_ARN:
+        raise RuntimeError(
+            "BROWSER_EXECUTION_ROLE_ARN must be set when BROWSER_SIGNING_ENABLED=true"
+        )
+
+    ctrl = _ctrl_client()
+
+    # Check if a browser with the same name already exists
+    try:
+        paginator = ctrl.get_paginator("list_browsers")
+        for page in paginator.paginate():
+            for b in page.get("browserSummaries", []):
+                if b.get("browserName") == browser_name:
+                    bid = b["browserId"]
+                    logger.info("Reusing existing signed browser: %s", bid)
+                    return bid
+    except Exception as e:
+        logger.warning("list_browsers failed (may not be supported): %s", e)
+
+    # Create a new browser with signing enabled
+    resp = ctrl.create_browser(
+        name=browser_name,
+        description="CrawlAgentcore browser with Web Bot Auth (request signing)",
+        networkConfiguration={"networkMode": "PUBLIC"},
+        executionRoleArn=_EXECUTION_ROLE_ARN,
+        browserSigning={"enabled": True},
+    )
+    bid = resp["browserId"]
+    logger.info("Created signed browser: %s", bid)
+    return bid
+
+
+def get_effective_browser_id() -> str:
+    """Return the browser ID to use for this request.
+
+    If Web Bot Auth is enabled, ensure a signing-enabled browser exists and
+    return its ID. Otherwise fall back to the BROWSER_ID env var.
+    """
+    if _SIGNING_ENABLED:
+        return ensure_browser_with_signing()
+    if not BROWSER_ID:
+        raise RuntimeError("BROWSER_ID environment variable is not set")
+    return BROWSER_ID
+
+
+# ---------------------------------------------------------------------------
+# Low-level session helpers
+# ---------------------------------------------------------------------------
 
 def _start_session(client, browser_id: str, timeout: int = 300) -> str:
     resp = client.start_browser_session(
@@ -84,11 +164,9 @@ def _invoke(client, browser_id: str, session_id: str, action: dict) -> dict:
 
 def _navigate(client, browser_id: str, session_id: str, url: str) -> None:
     """Navigate by clicking the address bar, typing the URL, and pressing Enter."""
-    # Focus address bar with keyboard shortcut
     _invoke(client, browser_id, session_id,
             {"keyShortcut": {"keys": ["ctrl", "l"]}})
     time.sleep(0.5)
-    # Clear + type URL
     _invoke(client, browser_id, session_id,
             {"keyShortcut": {"keys": ["ctrl", "a"]}})
     _invoke(client, browser_id, session_id,
@@ -153,24 +231,26 @@ def _browser_crawl_impl(
     """
     Open url in a managed Chromium session, render JS, extract content.
 
-    Returns dict with keys: url, title, text_content, links, screenshot_b64, method.
+    Returns dict with keys: url, title, text_content, links, screenshot_b64,
+    method, web_bot_auth_enabled.
     """
+    browser_id = get_effective_browser_id()
     client = _rt_client()
     session_id = None
     try:
         # 1. Start session
-        session_id = _start_session(client, BROWSER_ID)
-        logger.info("Browser session started: %s", session_id)
+        session_id = _start_session(client, browser_id)
+        logger.info("Browser session started: %s (signing=%s)", session_id, _SIGNING_ENABLED)
 
         # 2. Enable automation stream (CDP)
-        _enable_automation_stream(client, BROWSER_ID, session_id)
-        ws_endpoint = _wait_stream_ready(client, BROWSER_ID, session_id)
+        _enable_automation_stream(client, browser_id, session_id)
+        ws_endpoint = _wait_stream_ready(client, browser_id, session_id)
 
         # 3. Navigate
-        _navigate(client, BROWSER_ID, session_id, url)
+        _navigate(client, browser_id, session_id, url)
         time.sleep(wait_seconds)  # wait for JS rendering
 
-        # 4. Extract via CDP JS injection (fastest, most accurate)
+        # 4. Extract via CDP JS injection
         title = ""
         text_content = ""
         links = []
@@ -191,8 +271,8 @@ def _browser_crawl_impl(
             except (json.JSONDecodeError, TypeError):
                 links = []
 
-        # 5. Screenshot (fallback for JS-heavy / visual content)
-        screenshot_b64 = _screenshot_b64(client, BROWSER_ID, session_id)
+        # 5. Screenshot
+        screenshot_b64 = _screenshot_b64(client, browser_id, session_id)
 
         return {
             "url": url,
@@ -201,14 +281,16 @@ def _browser_crawl_impl(
             "links": links,
             "screenshot_b64": screenshot_b64,
             "method": "browser",
+            "web_bot_auth_enabled": _SIGNING_ENABLED,
         }
 
     except Exception as e:
         logger.error("browser_crawl_impl failed for %s: %s", url, e)
-        return {"url": url, "error": str(e), "method": "browser"}
+        return {"url": url, "error": str(e), "method": "browser",
+                "web_bot_auth_enabled": _SIGNING_ENABLED}
     finally:
         if session_id:
-            _stop_session(client, BROWSER_ID, session_id)
+            _stop_session(client, browser_id, session_id)
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +316,7 @@ try:
 
         Returns:
             JSON string with keys: url, title, text_content, links (list),
-            screenshot_b64 (base64 PNG), method="browser".
+            screenshot_b64 (base64 PNG), method="browser", web_bot_auth_enabled (bool).
             On error: {"url": ..., "error": "...", "method": "browser"}
         """
         result = _browser_crawl_impl(url, wait_seconds=wait_seconds)
