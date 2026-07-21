@@ -84,11 +84,12 @@ code_interpreter_tool = AgentCoreCodeInterpreter(region=REGION, identifier=CODE_
 # ---------------------------------------------------------------------------
 # AgentCore Browser tool (optional — loaded only when use_browser=True)
 # ---------------------------------------------------------------------------
+_browser_crawl_impl = None
 try:
     try:
-        from src.browser_tool import browser_crawl as _browser_crawl_tool
+        from src.browser_tool import browser_crawl as _browser_crawl_tool, _browser_crawl_impl
     except ModuleNotFoundError:
-        from browser_tool import browser_crawl as _browser_crawl_tool
+        from browser_tool import browser_crawl as _browser_crawl_tool, _browser_crawl_impl
     BROWSER_TOOL_AVAILABLE = True
     logger.info("Browser tool loaded (BROWSER_ID=%s)",
                 os.environ.get("BROWSER_ID", "<not set>"))
@@ -392,7 +393,13 @@ def _auto_select_skill(prompt: str) -> str:
         return skills[0]["name"] if skills else "default-crawl"
 
     skills_json = json.dumps(skills, indent=2)
+    from strands.models import BedrockModel
+    from botocore.config import Config as BotocoreConfig
     selector = Agent(
+        model=BedrockModel(
+            model_id="us.anthropic.claude-sonnet-4-5",
+            boto_client_config=BotocoreConfig(read_timeout=300, connect_timeout=10),
+        ),
         tools=[],
         system_prompt=SELECTOR_PROMPT.format(skills_json=skills_json, prompt=prompt),
     )
@@ -471,16 +478,45 @@ def invoke(payload: dict, context: dict) -> dict:
     skill = load_skill(skill_name, arguments=skill_args)
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(crawl_style=skill.content)
 
-    # Inject browser tool hint + tool when requested
-    tools = [code_interpreter_tool.code_interpreter]
-    if use_browser and BROWSER_TOOL_AVAILABLE and _browser_crawl_tool is not None:
-        tools.append(_browser_crawl_tool)
-        system_prompt = system_prompt + BROWSER_FORCE
-        logger.info("Browser tool FORCED for this request")
+    # ── Browser fast-path: skip Agent tool-call loop to avoid Runtime timeout ──
+    # When use_browser=True, call _browser_crawl_impl directly instead of routing
+    # through the Agent. This saves 2-3 LLM roundtrips (~80-120s) and keeps the
+    # total request well within the AgentCore Runtime timeout ceiling (~145s).
+    if use_browser and BROWSER_TOOL_AVAILABLE and _browser_crawl_impl is not None:
+        import re as _re_url
+        # Extract URL from prompt if present, otherwise pass full prompt as URL hint
+        _url_match = _re_url.search(r'https?://\S+', prompt)
+        target_url = _url_match.group(0).rstrip('.,)"\'') if _url_match else prompt
+
+        logger.info("Browser fast-path: crawling %s directly", target_url)
+        browser_result = _browser_crawl_impl(target_url, wait_seconds=3.0)
+
+        response = {
+            "result": {"content": [{"text": f"Browser crawl completed for {target_url}"}]},
+            "crawler_output": browser_result,
+            "skill_used": skill_name,
+            "skill_description": skill.description,
+            "auto_selected": explicit_skill is None,
+            "browser_used": True,
+            "web_bot_auth_enabled": os.environ.get("BROWSER_SIGNING_ENABLED", "").lower() in ("1", "true", "yes"),
+            "available_skills": list_skills(),
+        }
+        return _ensure_ascii_safe(response)
+
     elif use_browser and not BROWSER_TOOL_AVAILABLE:
         logger.warning("use_browser=True but browser tool is not available; falling back to code_interpreter")
 
+    # ── Standard Agent path (code_interpreter) ──
+    tools = [code_interpreter_tool.code_interpreter]
+
+    from strands.models import BedrockModel
+    from botocore.config import Config as BotocoreConfig
+    bedrock_model = BedrockModel(
+        model_id="us.anthropic.claude-sonnet-4-5",
+        boto_client_config=BotocoreConfig(read_timeout=300, connect_timeout=10),
+    )
     agent = Agent(
+        model=bedrock_model,
         tools=tools,
         system_prompt=system_prompt,
     )
@@ -542,7 +578,7 @@ def invoke(payload: dict, context: dict) -> dict:
         "skill_used": skill.name,
         "skill_description": skill.description,
         "auto_selected": explicit_skill is None,
-        "browser_used": use_browser and BROWSER_TOOL_AVAILABLE,
+        "browser_used": False,
         "available_skills": list_skills(),
     }
 

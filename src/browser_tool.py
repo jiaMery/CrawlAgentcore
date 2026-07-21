@@ -41,6 +41,10 @@ REGION = os.environ.get("AWS_REGION", "us-east-1")
 _SIGNING_ENABLED = os.environ.get("BROWSER_SIGNING_ENABLED", "").lower() in ("1", "true", "yes")
 _EXECUTION_ROLE_ARN = os.environ.get("BROWSER_EXECUTION_ROLE_ARN", "")
 
+# Module-level cache — resolved once at import time when signing is enabled,
+# so tool invocations never block on AWS API calls mid-LLM-stream.
+_SIGNED_BROWSER_ID: str = ""
+
 
 # ---------------------------------------------------------------------------
 # boto3 clients
@@ -60,15 +64,11 @@ def _ctrl_client():
 # Web Bot Auth helpers
 # ---------------------------------------------------------------------------
 
-def ensure_browser_with_signing(browser_name: str = "crawler-browser-signed") -> str:
-    """Create (or return existing) a Browser instance with Web Bot Auth enabled.
+def _resolve_signed_browser_id(browser_name: str = "crawler-browser-signed") -> str:
+    """Create (or reuse) a signing-enabled Browser instance.
 
-    Called once at startup when BROWSER_SIGNING_ENABLED=true.
-    Returns the browserIdentifier of the created/existing browser.
-
-    Requires:
-      BROWSER_EXECUTION_ROLE_ARN — IAM role with trust policy allowing
-        bedrock-agentcore.amazonaws.com to assume it (see README).
+    Called ONCE at module load when BROWSER_SIGNING_ENABLED=true so that
+    subsequent tool calls never block on AWS control-plane APIs.
     """
     if not _EXECUTION_ROLE_ARN:
         raise RuntimeError(
@@ -77,19 +77,19 @@ def ensure_browser_with_signing(browser_name: str = "crawler-browser-signed") ->
 
     ctrl = _ctrl_client()
 
-    # Check if a browser with the same name already exists
+    # Reuse existing browser with the same name
     try:
         paginator = ctrl.get_paginator("list_browsers")
         for page in paginator.paginate():
             for b in page.get("browserSummaries", []):
                 if b.get("browserName") == browser_name:
                     bid = b["browserId"]
-                    logger.info("Reusing existing signed browser: %s", bid)
+                    logger.info("Web Bot Auth: reusing signed browser %s", bid)
                     return bid
     except Exception as e:
-        logger.warning("list_browsers failed (may not be supported): %s", e)
+        logger.warning("list_browsers failed: %s", e)
 
-    # Create a new browser with signing enabled
+    # Create new browser with signing enabled
     resp = ctrl.create_browser(
         name=browser_name,
         description="CrawlAgentcore browser with Web Bot Auth (request signing)",
@@ -98,18 +98,24 @@ def ensure_browser_with_signing(browser_name: str = "crawler-browser-signed") ->
         browserSigning={"enabled": True},
     )
     bid = resp["browserId"]
-    logger.info("Created signed browser: %s", bid)
+    logger.info("Web Bot Auth: created signed browser %s", bid)
     return bid
 
 
-def get_effective_browser_id() -> str:
-    """Return the browser ID to use for this request.
+# Resolve at import time — blocks once during container startup, never during requests
+if _SIGNING_ENABLED:
+    try:
+        _SIGNED_BROWSER_ID = _resolve_signed_browser_id()
+        logger.info("Web Bot Auth enabled, browser ID: %s", _SIGNED_BROWSER_ID)
+    except Exception as _e:
+        logger.error("Web Bot Auth init failed: %s — falling back to BROWSER_ID", _e)
+        _SIGNING_ENABLED = False
 
-    If Web Bot Auth is enabled, ensure a signing-enabled browser exists and
-    return its ID. Otherwise fall back to the BROWSER_ID env var.
-    """
-    if _SIGNING_ENABLED:
-        return ensure_browser_with_signing()
+
+def get_effective_browser_id() -> str:
+    """Return the browser ID to use for this request."""
+    if _SIGNING_ENABLED and _SIGNED_BROWSER_ID:
+        return _SIGNED_BROWSER_ID
     if not BROWSER_ID:
         raise RuntimeError("BROWSER_ID environment variable is not set")
     return BROWSER_ID

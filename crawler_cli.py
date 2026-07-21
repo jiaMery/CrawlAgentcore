@@ -299,6 +299,11 @@ def invoke_agent(prompt, skill=None, dev=False, cloud=False, timeout=180, use_br
 
     session_id = f"cli-{uuid.uuid4().hex}"
 
+    # Auto-detect cloud mode when AGENTCORE_RUNTIME_ID is set and neither
+    # --cloud nor --dev was explicitly specified.
+    if not cloud and not dev and os.environ.get("AGENTCORE_RUNTIME_ID"):
+        cloud = True
+
     # Cloud mode: call the deployed AgentCore Runtime Endpoint via boto3.
     if cloud:
         parsed = _invoke_agent_cloud(payload, session_id, timeout)
@@ -498,8 +503,10 @@ def run_one(prompt, skill, dev, cloud, timeout, output_file, t, use_browser=Fals
     auto = response.get("auto_selected", True)
     mode = t["auto"] if auto else t["manual"]
     browser_used = response.get("browser_used", False)
+    web_bot_auth = response.get("web_bot_auth_enabled", False)
     browser_tag = f" {DIM}[browser]{RESET}" if browser_used else ""
-    print(f"{t['skill_used']}: {GREEN}{skill_used}{RESET} {DIM}{mode}{RESET}{browser_tag}")
+    auth_tag = f" {GREEN}[Web Bot Auth ✓]{RESET}" if web_bot_auth else ""
+    print(f"{t['skill_used']}: {GREEN}{skill_used}{RESET} {DIM}{mode}{RESET}{browser_tag}{auth_tag}")
 
     # ── Agent text response ─────────────────────────────────────────
     agent_text = extract_agent_text(response.get("result"))
